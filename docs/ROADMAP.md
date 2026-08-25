@@ -174,7 +174,7 @@ converge on the same instant.
 Not built: the control plane webhook that revokes by identity when an instance is destroyed. It needs
 marstack-cloud to emit the event, and `RevokeIdentity` is already there to receive it.
 
-## M6 — Parameter store (in progress)
+## M6 — Parameter store (done)
 
 Typing and inheritance are done, in `internal/modules/param`. A value declares one of `string`,
 `int`, `bool` or `stringlist` and is validated on write, so a wrong type is caught where it is typed
@@ -196,7 +196,19 @@ the code existed:
   path is easier to keep correct than two, and encrypting a parameter more strongly than it needs
   costs nothing.
 
-Still to come in M6: references to secrets, and the endpoints.
+References are done. A value may contain `${secret/<tenant>/<path>}`, resolved when the parameter is
+read, and three rules make that safe rather than convenient:
+
+- The referenced secret is authorized separately. An identity with parameter access but no secret
+  access is refused, which is asserted, because otherwise a parameter would be a way around policy.
+- A reference cannot name another tenant. The check is explicit rather than left to the authorizer.
+- Resolution does not recurse. A secret whose contents happen to look like a reference is returned
+  literally, so there are no loops and no depth to bound.
+
+A resolved value is reported as sensitive, with the references it consumed, so a caller and an
+operator can both tell that a parameter is carrying secret material.
+
+Every parameter operation is audited, including refusals, and the value never reaches the log.
 
 ## M7 — Audit and metrics (done)
 

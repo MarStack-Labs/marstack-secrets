@@ -15,11 +15,13 @@ import (
 	"github.com/marstack-labs/marstack-secrets/internal/modules/health"
 	"github.com/marstack-labs/marstack-secrets/internal/modules/lease"
 	"github.com/marstack-labs/marstack-secrets/internal/modules/observe"
+	"github.com/marstack-labs/marstack-secrets/internal/modules/param"
 	"github.com/marstack-labs/marstack-secrets/internal/modules/policy"
 	"github.com/marstack-labs/marstack-secrets/internal/modules/seal"
 	"github.com/marstack-labs/marstack-secrets/internal/modules/secret"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/audit"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/config"
+	"github.com/marstack-labs/marstack-secrets/internal/platform/crypto"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/httpx"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/jwt"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/ratelimit"
@@ -65,6 +67,18 @@ func (s sealingSink) Append(ctx context.Context, event audit.Event) error {
 		s.seal.Seal()
 	}
 	return err
+}
+
+type secretReader struct {
+	service *secret.Service
+}
+
+func (s secretReader) Reveal(ctx context.Context, tenant, path string) (crypto.Sensitive, int, error) {
+	value, err := s.service.Get(ctx, tenant, path, 0)
+	if err != nil {
+		return nil, 0, err
+	}
+	return value.Data, value.Version, nil
 }
 
 type leaseIssuer struct {
@@ -134,6 +148,18 @@ func assemble(ctx context.Context, cfg config.Config, logger *slog.Logger, db *s
 		return nil, err
 	}
 
+	paramStore, err := param.NewStore(db, sealManager.Cipher(), param.Options{})
+	if err != nil {
+		return nil, err
+	}
+	if err := paramStore.Migrate(ctx); err != nil {
+		return nil, err
+	}
+	paramService, err := param.NewService(paramStore, policyManager, secretReader{service: secretService})
+	if err != nil {
+		return nil, err
+	}
+
 	assertions, err := instanceVerifier(cfg)
 	if err != nil {
 		return nil, err
@@ -177,6 +203,12 @@ func assemble(ctx context.Context, cfg config.Config, logger *slog.Logger, db *s
 			policy.NewModule(policyManager, guard, logger),
 			lease.NewModule(leaseManager, lease.ModuleOptions{
 				Authorizer: policyManager,
+				Guard:      guard,
+				Logger:     logger,
+			}),
+			param.NewModule(paramService, param.ModuleOptions{
+				Authorizer: policyManager,
+				Audit:      sink,
 				Guard:      guard,
 				Logger:     logger,
 			}),

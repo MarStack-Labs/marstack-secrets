@@ -23,6 +23,9 @@ authentication exists would be an unauthenticated secret endpoint. See
 | `GET /v1/sys/seal-status` | Whether the store is uninitialized, sealed, or unsealed |
 | `POST /v1/sys/init` | Generates the root key and returns the unseal shares, once |
 | `POST /v1/sys/unseal` | Submits one share; the store opens when a quorum is reached |
+| `POST /v1/auth/bootstrap/login` | Trades a single-use bootstrap token for a session token |
+| `GET /v1/auth/self` | The identity behind the presented token |
+| `POST /v1/auth/logout` | Revokes the presented token |
 
 Every other path answers `503 sealed` until the store is unsealed. A path that no module registered
 answers `404 not_found` whether or not it exists, so the route table stays private.
@@ -55,6 +58,28 @@ curl -s -X POST http://127.0.0.1:8200/v1/sys/unseal -d '{"share":"mFMPJqpx..."}'
 
 Three distinct shares in any order open it. A wrong quorum discards the collected shares and starts
 over.
+
+Provisioning happens on the host, against the database directly, and needs neither the network nor an
+unsealed store:
+
+```sh
+sudo -u marstack-secrets marsec operator identity add instance/web-01 --tenant prod --kind instance
+sudo -u marstack-secrets marsec operator bootstrap instance/web-01
+mss_WxZBPHbN-KSshKFKSoTJ0QLmAos76gO2MSBFUkQXdy4
+```
+
+The workload trades that token once for a session token:
+
+```sh
+curl -s -X POST http://127.0.0.1:8200/v1/auth/bootstrap/login -d '{"token":"mss_WxZ..."}'
+{"token":"mss_zUg_...","expires_at":"2026-08-25T12:51:48Z"}
+
+curl -s http://127.0.0.1:8200/v1/auth/self -H 'Authorization: Bearer mss_zUg_...'
+{"identity":"instance/web-01","kind":"instance","tenant":"prod"}
+```
+
+Positional arguments come before flags in `marsec operator`, because Go's flag parsing stops at the
+first non-flag token.
 
 ## Documentation
 

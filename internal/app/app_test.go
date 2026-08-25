@@ -75,8 +75,25 @@ func TestHandlerServesRegisteredModules(t *testing.T) {
 
 func TestModuleNames(t *testing.T) {
 	names := testApp(t).ModuleNames()
-	if len(names) != 2 || names[0] != "health" || names[1] != "seal" {
-		t.Fatalf("ModuleNames() = %v, want [health seal]", names)
+	want := []string{"health", "seal", "auth"}
+	if len(names) != len(want) {
+		t.Fatalf("ModuleNames() = %v, want %v", names, want)
+	}
+	for index := range want {
+		if names[index] != want[index] {
+			t.Fatalf("ModuleNames() = %v, want %v", names, want)
+		}
+	}
+}
+
+func TestAuthEndpointsAreRefusedWhileSealed(t *testing.T) {
+	handler := testApp(t).Handler()
+
+	for _, path := range []string{"/v1/auth/bootstrap/login", "/v1/auth/self"} {
+		recorder := call(t, handler, http.MethodPost, path, map[string]string{"token": "mss_x"})
+		if recorder.Code != http.StatusServiceUnavailable {
+			t.Errorf("%s returned %d while sealed, want %d", path, recorder.Code, http.StatusServiceUnavailable)
+		}
 	}
 }
 

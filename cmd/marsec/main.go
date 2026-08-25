@@ -33,6 +33,8 @@ func run(args []string) error {
 	switch args[0] {
 	case "server":
 		return serve()
+	case "operator":
+		return runOperator(context.Background(), os.Stdout, args[1:])
 	case "version":
 		fmt.Println(version)
 		return nil
@@ -92,6 +94,7 @@ func usage() {
 
 Usage:
   marsec server     start the server
+  marsec operator   local administration; see marsec operator
   marsec version    print the binary version
   marsec help       show this message
 

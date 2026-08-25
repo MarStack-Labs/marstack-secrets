@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/marstack-labs/marstack-secrets/internal/platform/authn"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/crypto"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/sqlite"
 )
@@ -45,7 +46,7 @@ func newTestManager(t *testing.T) (*Manager, *clock, *sql.DB) {
 	return manager, tick, db
 }
 
-func registered(t *testing.T, manager *Manager, id string, kind Kind) Identity {
+func registered(t *testing.T, manager *Manager, id string, kind authn.Kind) authn.Identity {
 	t.Helper()
 	identity, err := manager.RegisterIdentity(t.Context(), id, kind, "prod")
 	if err != nil {
@@ -66,8 +67,8 @@ func issued(t *testing.T, manager *Manager, identityID, binding string) Token {
 func TestRegisterAndReadAnIdentity(t *testing.T) {
 	manager, _, _ := newTestManager(t)
 
-	created := registered(t, manager, "instance/web-01", KindInstance)
-	if created.Kind != KindInstance || created.Tenant != "prod" || created.Disabled {
+	created := registered(t, manager, "instance/web-01", authn.KindInstance)
+	if created.Kind != authn.KindInstance || created.Tenant != "prod" || created.Disabled {
 		t.Fatalf("RegisterIdentity returned %+v", created)
 	}
 
@@ -86,23 +87,23 @@ func TestRegisterAndReadAnIdentity(t *testing.T) {
 
 func TestRegisterRejectsDuplicatesAndBadInput(t *testing.T) {
 	manager, _, _ := newTestManager(t)
-	registered(t, manager, "instance/web-01", KindInstance)
+	registered(t, manager, "instance/web-01", authn.KindInstance)
 
-	if _, err := manager.RegisterIdentity(t.Context(), "instance/web-01", KindInstance, "prod"); !errors.Is(err, ErrIdentityExists) {
+	if _, err := manager.RegisterIdentity(t.Context(), "instance/web-01", authn.KindInstance, "prod"); !errors.Is(err, ErrIdentityExists) {
 		t.Errorf("a duplicate registration = %v, want ErrIdentityExists", err)
 	}
 
 	cases := map[string]struct {
 		id     string
-		kind   Kind
+		kind   authn.Kind
 		tenant string
 		want   error
 	}{
-		"empty id":     {id: "", kind: KindInstance, tenant: "prod", want: ErrInvalidIdentity},
-		"long id":      {id: strings.Repeat("a", maxIdentityLen+1), kind: KindInstance, tenant: "prod", want: ErrInvalidIdentity},
-		"unknown kind": {id: "instance/web-02", kind: Kind("robot"), tenant: "prod", want: ErrInvalidKind},
-		"empty kind":   {id: "instance/web-02", kind: Kind(""), tenant: "prod", want: ErrInvalidKind},
-		"empty tenant": {id: "instance/web-02", kind: KindInstance, tenant: "", want: ErrInvalidTenant},
+		"empty id":     {id: "", kind: authn.KindInstance, tenant: "prod", want: ErrInvalidIdentity},
+		"long id":      {id: strings.Repeat("a", maxIdentityLen+1), kind: authn.KindInstance, tenant: "prod", want: ErrInvalidIdentity},
+		"unknown kind": {id: "instance/web-02", kind: authn.Kind("robot"), tenant: "prod", want: ErrInvalidKind},
+		"empty kind":   {id: "instance/web-02", kind: authn.Kind(""), tenant: "prod", want: ErrInvalidKind},
+		"empty tenant": {id: "instance/web-02", kind: authn.KindInstance, tenant: "", want: ErrInvalidTenant},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -115,7 +116,7 @@ func TestRegisterRejectsDuplicatesAndBadInput(t *testing.T) {
 
 func TestIssueAndAuthenticate(t *testing.T) {
 	manager, _, _ := newTestManager(t)
-	registered(t, manager, "instance/web-01", KindInstance)
+	registered(t, manager, "instance/web-01", authn.KindInstance)
 
 	token := issued(t, manager, "instance/web-01", NoBinding)
 	if !strings.HasPrefix(string(token.Value), tokenPrefix) {
@@ -129,14 +130,14 @@ func TestIssueAndAuthenticate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Authenticate returned error: %v", err)
 	}
-	if identity.ID != "instance/web-01" || identity.Tenant != "prod" || identity.Kind != KindInstance {
+	if identity.ID != "instance/web-01" || identity.Tenant != "prod" || identity.Kind != authn.KindInstance {
 		t.Errorf("Authenticate() = %+v", identity)
 	}
 }
 
 func TestTokensAreStoredOnlyAsAFingerprint(t *testing.T) {
 	manager, _, db := newTestManager(t)
-	registered(t, manager, "instance/web-01", KindInstance)
+	registered(t, manager, "instance/web-01", authn.KindInstance)
 	token := issued(t, manager, "instance/web-01", NoBinding)
 
 	var stored []byte
@@ -157,8 +158,8 @@ func TestTokensAreStoredOnlyAsAFingerprint(t *testing.T) {
 
 func TestEveryFailureLooksTheSame(t *testing.T) {
 	manager, tick, _ := newTestManager(t)
-	registered(t, manager, "instance/web-01", KindInstance)
-	registered(t, manager, "instance/web-02", KindInstance)
+	registered(t, manager, "instance/web-01", authn.KindInstance)
+	registered(t, manager, "instance/web-02", authn.KindInstance)
 
 	expired := issued(t, manager, "instance/web-01", NoBinding)
 	revoked := issued(t, manager, "instance/web-01", NoBinding)
@@ -194,7 +195,7 @@ func TestEveryFailureLooksTheSame(t *testing.T) {
 			if !errors.Is(err, ErrUnauthenticated) {
 				t.Fatalf("Authenticate = %v, want ErrUnauthenticated", err)
 			}
-			if identity != (Identity{}) {
+			if identity != (authn.Identity{}) {
 				t.Errorf("Authenticate returned %+v alongside the error", identity)
 			}
 		})
@@ -203,7 +204,7 @@ func TestEveryFailureLooksTheSame(t *testing.T) {
 
 func TestABoundTokenOnlyWorksAtItsBinding(t *testing.T) {
 	manager, _, _ := newTestManager(t)
-	registered(t, manager, "instance/web-01", KindInstance)
+	registered(t, manager, "instance/web-01", authn.KindInstance)
 	token := issued(t, manager, "instance/web-01", "web-01")
 
 	if _, err := manager.Authenticate(t.Context(), token.Value, "web-01"); err != nil {
@@ -216,7 +217,7 @@ func TestABoundTokenOnlyWorksAtItsBinding(t *testing.T) {
 
 func TestATokenExpiresExactlyAtItsDeadline(t *testing.T) {
 	manager, tick, _ := newTestManager(t)
-	registered(t, manager, "instance/web-01", KindInstance)
+	registered(t, manager, "instance/web-01", authn.KindInstance)
 	token := issued(t, manager, "instance/web-01", NoBinding)
 
 	tick.advance(DefaultTTL - time.Nanosecond)
@@ -232,8 +233,8 @@ func TestATokenExpiresExactlyAtItsDeadline(t *testing.T) {
 
 func TestRevokeIdentityKillsEveryToken(t *testing.T) {
 	manager, _, _ := newTestManager(t)
-	registered(t, manager, "instance/web-01", KindInstance)
-	registered(t, manager, "instance/web-02", KindInstance)
+	registered(t, manager, "instance/web-01", authn.KindInstance)
+	registered(t, manager, "instance/web-02", authn.KindInstance)
 
 	first := issued(t, manager, "instance/web-01", NoBinding)
 	second := issued(t, manager, "instance/web-01", NoBinding)
@@ -259,7 +260,7 @@ func TestRevokeIdentityKillsEveryToken(t *testing.T) {
 
 func TestIssueRejectsBadInput(t *testing.T) {
 	manager, _, _ := newTestManager(t)
-	registered(t, manager, "instance/web-01", KindInstance)
+	registered(t, manager, "instance/web-01", authn.KindInstance)
 
 	if _, err := manager.Issue(t.Context(), "instance/unknown", NoBinding, DefaultTTL); !errors.Is(err, ErrUnknownIdentity) {
 		t.Errorf("Issue for an unknown identity = %v, want ErrUnknownIdentity", err)
@@ -289,7 +290,7 @@ func TestDisableIdentityReportsUnknownIdentities(t *testing.T) {
 		t.Fatalf("DisableIdentity = %v, want ErrUnknownIdentity", err)
 	}
 
-	registered(t, manager, "instance/web-01", KindInstance)
+	registered(t, manager, "instance/web-01", authn.KindInstance)
 	for range 2 {
 		if err := manager.DisableIdentity(t.Context(), "instance/web-01"); err != nil {
 			t.Fatalf("DisableIdentity returned error: %v", err)
@@ -299,7 +300,7 @@ func TestDisableIdentityReportsUnknownIdentities(t *testing.T) {
 
 func TestIssuedTokensAreUnique(t *testing.T) {
 	manager, _, _ := newTestManager(t)
-	registered(t, manager, "instance/web-01", KindInstance)
+	registered(t, manager, "instance/web-01", authn.KindInstance)
 
 	seen := make(map[string]struct{})
 	for range 64 {
@@ -313,7 +314,7 @@ func TestIssuedTokensAreUnique(t *testing.T) {
 
 func TestPurgeExpiredRemovesOnlyExpiredTokens(t *testing.T) {
 	manager, tick, _ := newTestManager(t)
-	registered(t, manager, "instance/web-01", KindInstance)
+	registered(t, manager, "instance/web-01", authn.KindInstance)
 
 	short := issued(t, manager, "instance/web-01", NoBinding)
 	long, err := manager.Issue(t.Context(), "instance/web-01", NoBinding, 10*DefaultTTL)
@@ -346,7 +347,7 @@ func TestNewManagerRequiresADatabase(t *testing.T) {
 
 func TestTokenValueIsRedacted(t *testing.T) {
 	manager, _, _ := newTestManager(t)
-	registered(t, manager, "instance/web-01", KindInstance)
+	registered(t, manager, "instance/web-01", authn.KindInstance)
 	token := issued(t, manager, "instance/web-01", NoBinding)
 
 	if rendered := token.Value.String(); strings.Contains(rendered, tokenPrefix) {

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/marstack-labs/marstack-secrets/internal/platform/authn"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/crypto"
 )
 
@@ -23,7 +24,7 @@ const (
 
 type Token struct {
 	Value     crypto.Sensitive
-	Identity  Identity
+	Identity  authn.Identity
 	ExpiresAt time.Time
 }
 

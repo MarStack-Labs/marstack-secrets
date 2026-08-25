@@ -76,7 +76,19 @@ Every rejection returns the same error. Expired, revoked, never issued, wrong bi
 identity and malformed all look identical from outside, so the endpoint cannot be used to learn
 which tokens exist.
 
-Still to come in M3: bootstrap tokens, then instance identity verified against the control plane:
+Bootstrap login works end to end. An operator registers an identity and mints a single-use token on
+the host with `marsec operator`, which writes to the database directly and needs neither the network
+nor an unsealed store. The workload trades that token once at `POST /v1/auth/bootstrap/login` for a
+session token and carries it as a bearer credential.
+
+Identities live in `internal/platform/authn`, not in the auth module. A handler in another module
+needs to read the caller, and modules cannot import each other, so the identity type and its context
+plumbing belong to the platform while the auth module keeps the storage and the endpoints.
+
+Auth endpoints are refused while sealed. A session for a store that can decrypt nothing is not worth
+issuing, so they are not on the sealed allowlist.
+
+Still to come in M3: instance identity verified against the control plane:
 signature over JWKS,
 expiry with a bounded clock skew, single-use `jti`, audience check, and a liveness check against the
 control plane. Tokens are bound to the instance that obtained them. Rate limiting per identity.

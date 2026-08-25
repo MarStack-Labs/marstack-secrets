@@ -45,6 +45,10 @@ requests cannot be verified while Actions are off.
 | Every path is refused while sealed unless a module opted it in | A route added later is protected by default rather than by remembering |
 | Unregistered paths answer `404` rather than `405` | A method mismatch does not confirm that a path exists |
 | Request bodies are capped and reject unknown fields | Removes a trivial denial of service and catches misspelled fields |
+| Tokens are stored as a SHA-256 fingerprint | The database cannot hand anyone a working credential |
+| Every authentication failure returns one error | The endpoint cannot be used to learn which tokens exist |
+| Bootstrap tokens are single use, consumed inside the issuing transaction | Concurrent exchanges cannot both succeed |
+| Auth endpoints are refused while sealed | A session for a store that decrypts nothing is not worth issuing |
 
 ## Data at rest
 
@@ -96,8 +100,11 @@ inside the boundary:
   [DEPLOYMENT.md](DEPLOYMENT.md).
 
 Explicitly outside the current scope, because the corresponding features do not exist yet:
-authentication, authorisation, and audit logging. Until they land, nothing but the seal endpoints is
+authorisation and audit logging. Until they land, nothing but the seal and auth endpoints is
 reachable over HTTP.
+
+Local root on the host is inside the boundary by design: `marsec operator` writes to the database
+directly, which is how the first credential comes into existence at all.
 
 ## Reporting
 

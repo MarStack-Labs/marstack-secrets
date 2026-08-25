@@ -6,6 +6,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/marstack-labs/marstack-secrets/internal/platform/authn"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/crypto"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/sqlite"
 )
@@ -34,9 +35,9 @@ func (m *Manager) Migrate(ctx context.Context) error {
 	return sqlite.Migrate(ctx, m.db, moduleName, migrations)
 }
 
-func (m *Manager) RegisterIdentity(ctx context.Context, id string, kind Kind, tenant string) (Identity, error) {
+func (m *Manager) RegisterIdentity(ctx context.Context, id string, kind authn.Kind, tenant string) (authn.Identity, error) {
 	if err := validateIdentity(id, kind, tenant); err != nil {
-		return Identity{}, err
+		return authn.Identity{}, err
 	}
 
 	now := m.now().UTC()
@@ -46,20 +47,20 @@ func (m *Manager) RegisterIdentity(ctx context.Context, id string, kind Kind, te
 	if err != nil {
 		if existing, lookupErr := m.Identity(ctx, id); lookupErr == nil {
 			_ = existing
-			return Identity{}, ErrIdentityExists
+			return authn.Identity{}, ErrIdentityExists
 		}
-		return Identity{}, err
+		return authn.Identity{}, err
 	}
 
-	return Identity{ID: id, Kind: kind, Tenant: tenant, CreatedAt: now}, nil
+	return authn.Identity{ID: id, Kind: kind, Tenant: tenant, CreatedAt: now}, nil
 }
 
-func (m *Manager) Identity(ctx context.Context, id string) (Identity, error) {
+func (m *Manager) Identity(ctx context.Context, id string) (authn.Identity, error) {
 	return m.identityOn(ctx, m.db, id)
 }
 
-func (m *Manager) identityOn(ctx context.Context, on querier, id string) (Identity, error) {
-	identity := Identity{ID: id}
+func (m *Manager) identityOn(ctx context.Context, on querier, id string) (authn.Identity, error) {
+	identity := authn.Identity{ID: id}
 	var kind, createdAt string
 	var disabledAt sql.NullString
 
@@ -67,16 +68,16 @@ func (m *Manager) identityOn(ctx context.Context, on querier, id string) (Identi
 		`SELECT kind, tenant, created_at, disabled_at FROM auth_identities WHERE id = ?`, id,
 	).Scan(&kind, &identity.Tenant, &createdAt, &disabledAt)
 	if errors.Is(err, sql.ErrNoRows) {
-		return Identity{}, ErrUnknownIdentity
+		return authn.Identity{}, ErrUnknownIdentity
 	}
 	if err != nil {
-		return Identity{}, err
+		return authn.Identity{}, err
 	}
 
-	identity.Kind = Kind(kind)
+	identity.Kind = authn.Kind(kind)
 	identity.Disabled = disabledAt.Valid
 	if identity.CreatedAt, err = sqlite.ParseTime(createdAt); err != nil {
-		return Identity{}, err
+		return authn.Identity{}, err
 	}
 	return identity, nil
 }
@@ -134,9 +135,9 @@ func (m *Manager) issue(ctx context.Context, on executor, identityID, binding st
 	return Token{Value: value, Identity: identity, ExpiresAt: expiresAt}, nil
 }
 
-func (m *Manager) Authenticate(ctx context.Context, presented crypto.Sensitive, binding string) (Identity, error) {
+func (m *Manager) Authenticate(ctx context.Context, presented crypto.Sensitive, binding string) (authn.Identity, error) {
 	if !looksLikeToken(presented) {
-		return Identity{}, ErrUnauthenticated
+		return authn.Identity{}, ErrUnauthenticated
 	}
 
 	var identityID, storedBinding, expiresAt string
@@ -155,37 +156,37 @@ func (m *Manager) Authenticate(ctx context.Context, presented crypto.Sensitive, 
 		&kind, &tenant, &createdAt, &disabledAt)
 
 	if errors.Is(err, sql.ErrNoRows) {
-		return Identity{}, ErrUnauthenticated
+		return authn.Identity{}, ErrUnauthenticated
 	}
 	if err != nil {
-		return Identity{}, err
+		return authn.Identity{}, err
 	}
 
 	expiry, err := sqlite.ParseTime(expiresAt)
 	if err != nil {
-		return Identity{}, err
+		return authn.Identity{}, err
 	}
 	created, err := sqlite.ParseTime(createdAt)
 	if err != nil {
-		return Identity{}, err
+		return authn.Identity{}, err
 	}
 
 	switch {
 	case single == singleUse:
-		return Identity{}, ErrUnauthenticated
+		return authn.Identity{}, ErrUnauthenticated
 	case revokedAt.Valid:
-		return Identity{}, ErrUnauthenticated
+		return authn.Identity{}, ErrUnauthenticated
 	case disabledAt.Valid:
-		return Identity{}, ErrUnauthenticated
+		return authn.Identity{}, ErrUnauthenticated
 	case !m.now().UTC().Before(expiry):
-		return Identity{}, ErrUnauthenticated
+		return authn.Identity{}, ErrUnauthenticated
 	case storedBinding != binding:
-		return Identity{}, ErrUnauthenticated
+		return authn.Identity{}, ErrUnauthenticated
 	}
 
-	return Identity{
+	return authn.Identity{
 		ID:        identityID,
-		Kind:      Kind(kind),
+		Kind:      authn.Kind(kind),
 		Tenant:    tenant,
 		CreatedAt: created,
 	}, nil

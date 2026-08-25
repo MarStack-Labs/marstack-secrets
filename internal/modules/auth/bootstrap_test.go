@@ -7,12 +7,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/marstack-labs/marstack-secrets/internal/platform/authn"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/crypto"
 )
 
 func TestABootstrapTokenBuysASessionToken(t *testing.T) {
 	manager, _, _ := newTestManager(t)
-	registered(t, manager, "instance/web-01", KindBootstrap)
+	registered(t, manager, "instance/web-01", authn.KindBootstrap)
 
 	bootstrap, err := manager.IssueBootstrap(t.Context(), "instance/web-01", BootstrapTTL)
 	if err != nil {
@@ -38,7 +39,7 @@ func TestABootstrapTokenBuysASessionToken(t *testing.T) {
 
 func TestABootstrapTokenIsNotASessionToken(t *testing.T) {
 	manager, _, _ := newTestManager(t)
-	registered(t, manager, "instance/web-01", KindBootstrap)
+	registered(t, manager, "instance/web-01", authn.KindBootstrap)
 
 	bootstrap, err := manager.IssueBootstrap(t.Context(), "instance/web-01", BootstrapTTL)
 	if err != nil {
@@ -52,7 +53,7 @@ func TestABootstrapTokenIsNotASessionToken(t *testing.T) {
 
 func TestASessionTokenCannotBeExchanged(t *testing.T) {
 	manager, _, _ := newTestManager(t)
-	registered(t, manager, "instance/web-01", KindBootstrap)
+	registered(t, manager, "instance/web-01", authn.KindBootstrap)
 	session := issued(t, manager, "instance/web-01", NoBinding)
 
 	if _, err := manager.Exchange(t.Context(), session.Value, "web-01", DefaultTTL); !errors.Is(err, ErrUnauthenticated) {
@@ -62,7 +63,7 @@ func TestASessionTokenCannotBeExchanged(t *testing.T) {
 
 func TestABootstrapTokenWorksExactlyOnce(t *testing.T) {
 	manager, _, _ := newTestManager(t)
-	registered(t, manager, "instance/web-01", KindBootstrap)
+	registered(t, manager, "instance/web-01", authn.KindBootstrap)
 
 	bootstrap, err := manager.IssueBootstrap(t.Context(), "instance/web-01", BootstrapTTL)
 	if err != nil {
@@ -79,7 +80,7 @@ func TestABootstrapTokenWorksExactlyOnce(t *testing.T) {
 
 func TestConcurrentExchangesProduceExactlyOneSession(t *testing.T) {
 	manager, _, _ := newTestManager(t)
-	registered(t, manager, "instance/web-01", KindBootstrap)
+	registered(t, manager, "instance/web-01", authn.KindBootstrap)
 
 	bootstrap, err := manager.IssueBootstrap(t.Context(), "instance/web-01", BootstrapTTL)
 	if err != nil {
@@ -122,7 +123,7 @@ func TestConcurrentExchangesProduceExactlyOneSession(t *testing.T) {
 
 func TestExchangeRejectsAConsumedOrExpiredBootstrap(t *testing.T) {
 	manager, tick, _ := newTestManager(t)
-	registered(t, manager, "instance/web-01", KindBootstrap)
+	registered(t, manager, "instance/web-01", authn.KindBootstrap)
 
 	expired, err := manager.IssueBootstrap(t.Context(), "instance/web-01", BootstrapTTL)
 	if err != nil {
@@ -155,7 +156,7 @@ func TestExchangeRejectsAConsumedOrExpiredBootstrap(t *testing.T) {
 
 func TestExchangeRejectsABadSessionTTL(t *testing.T) {
 	manager, _, _ := newTestManager(t)
-	registered(t, manager, "instance/web-01", KindBootstrap)
+	registered(t, manager, "instance/web-01", authn.KindBootstrap)
 
 	bootstrap, err := manager.IssueBootstrap(t.Context(), "instance/web-01", BootstrapTTL)
 	if err != nil {
@@ -172,7 +173,7 @@ func TestExchangeRejectsABadSessionTTL(t *testing.T) {
 
 func TestExchangeForADisabledIdentityFails(t *testing.T) {
 	manager, _, _ := newTestManager(t)
-	registered(t, manager, "instance/web-01", KindBootstrap)
+	registered(t, manager, "instance/web-01", authn.KindBootstrap)
 
 	bootstrap, err := manager.IssueBootstrap(t.Context(), "instance/web-01", BootstrapTTL)
 	if err != nil {
@@ -189,7 +190,7 @@ func TestExchangeForADisabledIdentityFails(t *testing.T) {
 
 func TestExchangedSessionsCarryTheRequestedBinding(t *testing.T) {
 	manager, _, _ := newTestManager(t)
-	registered(t, manager, "instance/web-01", KindBootstrap)
+	registered(t, manager, "instance/web-01", authn.KindBootstrap)
 
 	bootstrap, err := manager.IssueBootstrap(t.Context(), "instance/web-01", BootstrapTTL)
 	if err != nil {

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"path/filepath"
 
+	"github.com/marstack-labs/marstack-secrets/internal/modules/auth"
 	"github.com/marstack-labs/marstack-secrets/internal/modules/health"
 	"github.com/marstack-labs/marstack-secrets/internal/modules/seal"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/config"
@@ -15,7 +16,7 @@ import (
 	"github.com/marstack-labs/marstack-secrets/internal/platform/sqlite"
 )
 
-const databaseFile = "marsec.db"
+const DatabaseFile = "marsec.db"
 
 type Module interface {
 	Name() string
@@ -35,16 +36,24 @@ type App struct {
 }
 
 func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*App, error) {
-	db, err := sqlite.Open(ctx, filepath.Join(cfg.DataDir, databaseFile))
+	db, err := sqlite.Open(ctx, filepath.Join(cfg.DataDir, DatabaseFile))
 	if err != nil {
 		return nil, err
 	}
 
-	manager, err := seal.NewManager(db, seal.Options{})
+	sealManager, err := seal.NewManager(db, seal.Options{})
 	if err != nil {
 		return nil, errors.Join(err, db.Close())
 	}
-	if err := manager.Migrate(ctx); err != nil {
+	if err := sealManager.Migrate(ctx); err != nil {
+		return nil, errors.Join(err, db.Close())
+	}
+
+	authManager, err := auth.NewManager(db, auth.Options{})
+	if err != nil {
+		return nil, errors.Join(err, db.Close())
+	}
+	if err := authManager.Migrate(ctx); err != nil {
 		return nil, errors.Join(err, db.Close())
 	}
 
@@ -52,10 +61,11 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*App, err
 		cfg:    cfg,
 		logger: logger,
 		db:     db,
-		seal:   manager,
+		seal:   sealManager,
 		modules: []Module{
 			health.New(),
-			seal.NewModule(manager, logger),
+			seal.NewModule(sealManager, logger),
+			auth.NewModule(authManager, logger),
 		},
 	}, nil
 }

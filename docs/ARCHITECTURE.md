@@ -64,6 +64,12 @@ without the owning module noticing.
 A module also owns its own schema. It declares its migrations and passes them to `sqlite.Migrate`
 under its own name, for the same reason there is no central routing table.
 
+Modules share a database but not each other's tables. A foreign key from one module's table into
+another's would make the two schemas one, and a migration in either could then break the other. So
+`policy_bindings` records an identity by its identifier with no foreign key to `auth_identities`: a
+binding left behind by a deleted identity is inert, because an identity that cannot authenticate is
+never evaluated.
+
 A module satisfies the contract only once it has an HTTP surface to expose. `internal/modules/secret`
 is a module with a Go API and no routes, and it stays that way until authentication exists in M3.
 

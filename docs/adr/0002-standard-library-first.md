@@ -27,8 +27,10 @@ Current state:
 | Configuration | Environment variables parsed into one struct |
 | CLI | Subcommand dispatch in `main`, roughly thirty lines |
 | Random identifiers | `crypto/rand.Text` |
+| Cryptography | `crypto/aes`, `crypto/cipher`, `crypto/rand` |
 
-The direct dependency count is currently zero.
+Persistence is the first concern the standard library could not cover, and it brought in the first
+direct dependency. See ADR 0004.
 
 ## Consequences
 

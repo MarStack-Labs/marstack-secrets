@@ -17,8 +17,14 @@ ciphertext moved to another location fails to decrypt rather than decrypting som
 belong. `Rewrap` rotates a key encryption key by rewrapping data keys only, leaving payloads
 untouched.
 
-Still to come: SQLite with write-ahead logging and `fsync` before acknowledging a write, versioned
-paths, soft delete and undelete, and check-and-set on write.
+The SQLite foundation is done, in `internal/platform/sqlite`. Write-ahead logging, `synchronous=FULL`
+so a commit is acknowledged only after `fsync`, foreign keys enforced, and a single writer connection.
+Pragmas are read back during `Open`, so one that fails to apply is a startup error rather than a
+silent assumption. Migrations are owned per module and checksummed, so editing a migration that has
+already run is an error rather than a no-op.
+
+Still to come: the versioned secret repository — paths with versions, soft delete and undelete,
+check-and-set on write, and the service that composes it with envelope encryption.
 
 Nothing in M1 is exposed over HTTP. A secret endpoint that predates M3 would be an unauthenticated
 secret endpoint, so the engine stays reachable from Go code and tests until authentication exists.

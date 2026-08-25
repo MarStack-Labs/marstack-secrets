@@ -60,5 +60,6 @@ pre-commit hook is where the security and architecture gates actually run.
 
 ## Requirements
 
-- Go 1.26 or newer
+- Go 1.26.6 or newer. Earlier 1.26 patch releases carry standard library vulnerabilities reachable
+  from the TLS listener, so `go.mod` requires the fixed toolchain
 - `gitleaks` on `PATH` for `make security`

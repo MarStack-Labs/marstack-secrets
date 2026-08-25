@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"time"
 )
 
 type querier interface {
@@ -70,19 +69,4 @@ func pruneOldVersions(ctx context.Context, e executor, tenant, path string, newe
 		 WHERE tenant = ? AND path = ? AND version <= ? AND destroyed_at IS NULL`,
 		now, tenant, path, threshold)
 	return err
-}
-
-func formatTime(t time.Time) string {
-	return t.UTC().Format(time.RFC3339Nano)
-}
-
-func parseTime(value string) (time.Time, error) {
-	return time.Parse(time.RFC3339Nano, value)
-}
-
-func parseNullTime(value sql.NullString) (time.Time, error) {
-	if !value.Valid {
-		return time.Time{}, nil
-	}
-	return parseTime(value.String)
 }

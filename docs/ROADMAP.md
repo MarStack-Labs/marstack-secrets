@@ -65,9 +65,19 @@ process made undumpable. Any failure stops the process unless the operator expli
 
 Auto-seal when the audit sink fails belongs with M7, since there is no audit sink to fail yet.
 
-## M3 — Authentication
+## M3 — Authentication (in progress)
 
-Bootstrap tokens, then instance identity verified against the control plane: signature over JWKS,
+Identities and tokens are done, in `internal/modules/auth`. A token is 256 random bits behind a
+`mss_` prefix and only its SHA-256 fingerprint is stored, so the database cannot hand anyone a
+working credential. Tokens carry an expiry and an optional binding, and can be revoked one at a time
+or all at once per identity.
+
+Every rejection returns the same error. Expired, revoked, never issued, wrong binding, disabled
+identity and malformed all look identical from outside, so the endpoint cannot be used to learn
+which tokens exist.
+
+Still to come in M3: bootstrap tokens, then instance identity verified against the control plane:
+signature over JWKS,
 expiry with a bounded clock skew, single-use `jti`, audience check, and a liveness check against the
 control plane. Tokens are bound to the instance that obtained them. Rate limiting per identity.
 

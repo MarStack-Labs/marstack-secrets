@@ -175,13 +175,13 @@ func (s *Store) Get(ctx context.Context, tenant, path string, version int) (Reco
 		return Record{}, err
 	}
 
-	if record.CreatedAt, err = parseTime(createdAt); err != nil {
+	if record.CreatedAt, err = sqlite.ParseTime(createdAt); err != nil {
 		return Record{}, err
 	}
-	if record.DeletedAt, err = parseNullTime(deletedAt); err != nil {
+	if record.DeletedAt, err = sqlite.ParseNullTime(deletedAt); err != nil {
 		return Record{}, err
 	}
-	if record.DestroyedAt, err = parseNullTime(destroyedAt); err != nil {
+	if record.DestroyedAt, err = sqlite.ParseNullTime(destroyedAt); err != nil {
 		return Record{}, err
 	}
 
@@ -214,10 +214,10 @@ func (s *Store) Metadata(ctx context.Context, tenant, path string) (Metadata, er
 		return Metadata{}, err
 	}
 
-	if metadata.CreatedAt, err = parseTime(createdAt); err != nil {
+	if metadata.CreatedAt, err = sqlite.ParseTime(createdAt); err != nil {
 		return Metadata{}, err
 	}
-	if metadata.UpdatedAt, err = parseTime(updatedAt); err != nil {
+	if metadata.UpdatedAt, err = sqlite.ParseTime(updatedAt); err != nil {
 		return Metadata{}, err
 	}
 	return metadata, nil
@@ -321,5 +321,5 @@ func (s *Store) mark(ctx context.Context, tenant, path string, versions []int, a
 }
 
 func (s *Store) timestamp() string {
-	return formatTime(s.now())
+	return sqlite.FormatTime(s.now())
 }

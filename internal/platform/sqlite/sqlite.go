@@ -24,13 +24,15 @@ var pragmas = []string{
 	"journal_mode(WAL)",
 	"synchronous(FULL)",
 	"foreign_keys(ON)",
+	"secure_delete(ON)",
 	"busy_timeout(5000)",
 }
 
 var expected = map[string]string{
-	"journal_mode": "wal",
-	"synchronous":  "2",
-	"foreign_keys": "1",
+	"journal_mode":  "wal",
+	"synchronous":   "2",
+	"foreign_keys":  "1",
+	"secure_delete": "1",
 }
 
 func Open(ctx context.Context, path string) (*sql.DB, error) {

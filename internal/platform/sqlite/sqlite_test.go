@@ -23,10 +23,11 @@ func TestOpenAppliesDurabilityPragmas(t *testing.T) {
 	db, _ := openTestDB(t)
 
 	for pragma, want := range map[string]string{
-		"journal_mode": "wal",
-		"synchronous":  "2",
-		"foreign_keys": "1",
-		"busy_timeout": "5000",
+		"journal_mode":  "wal",
+		"synchronous":   "2",
+		"foreign_keys":  "1",
+		"secure_delete": "1",
+		"busy_timeout":  "5000",
 	} {
 		var got string
 		if err := db.QueryRowContext(t.Context(), "PRAGMA "+pragma).Scan(&got); err != nil {

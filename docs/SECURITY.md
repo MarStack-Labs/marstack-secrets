@@ -43,6 +43,15 @@ requests cannot be verified while Actions are off.
 | Errors returned to clients are opaque codes | Internal detail belongs in the server log, not the response body |
 | `GET /v1/sys/health` returns only `{"status":"ok"}` | Version and build detail are reconnaissance |
 
+## Data at rest
+
+| Control | Effect |
+|---|---|
+| Envelope encryption | A stored value is never in plaintext, and the persistence layer never receives one |
+| Additional authenticated data | A ciphertext moved to another tenant, path, or version fails to decrypt |
+| `secure_delete=ON` | Destroying a version erases the bytes rather than marking the space free |
+| Database file `0600`, directory `0700` | Applied by `Open`, not left to the deployment |
+
 ## Assertions kept by tests
 
 - A panicking handler returns `500` with an opaque body, and the panic value never reaches the client.
@@ -50,6 +59,10 @@ requests cannot be verified while Actions are off.
 - Plaintext HTTP is off unless explicitly enabled.
 - Request identifiers are unique per request and are not read from the request headers.
 - The health response contains exactly one field.
+- Key material is redacted through `String`, `GoString`, every `fmt` verb, `slog`, and `json.Marshal`.
+- Decryption returns one opaque error for a wrong key, a moved ciphertext, and a tampered blob alike.
+- A plaintext never reaches the database.
+- Destroyed material is absent from the raw database and write-ahead log files.
 
 ## Threat boundary
 

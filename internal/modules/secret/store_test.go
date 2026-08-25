@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -247,6 +248,54 @@ func TestDestroyErasesKeyMaterial(t *testing.T) {
 
 	if _, err := store.Get(ctx, "prod", "payment-api", 1); !errors.Is(err, ErrDestroyed) {
 		t.Errorf("Get on a destroyed version = %v, want ErrDestroyed", err)
+	}
+}
+
+func TestDestroyedMaterialDoesNotLingerInTheDatabaseFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "marsec.db")
+	ctx := context.Background()
+
+	db, err := sqlite.Open(ctx, path)
+	if err != nil {
+		t.Fatalf("opening the database: %v", err)
+	}
+	store, err := NewStore(db, Options{})
+	if err != nil {
+		t.Fatalf("NewStore returned error: %v", err)
+	}
+	if err := store.Migrate(ctx); err != nil {
+		t.Fatalf("Migrate returned error: %v", err)
+	}
+
+	marker := bytes.Repeat([]byte{0x5A, 0xA5}, 512)
+	if _, err := store.Put(ctx, "prod", "payment-api", crypto.Envelope{
+		KEKVersion: 1,
+		WrappedDEK: marker,
+		Ciphertext: marker,
+	}, Absent()); err != nil {
+		t.Fatalf("Put returned error: %v", err)
+	}
+	if err := store.Destroy(ctx, "prod", "payment-api", 1); err != nil {
+		t.Fatalf("Destroy returned error: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
+		t.Fatalf("checkpointing the write ahead log: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("Close returned error: %v", err)
+	}
+
+	for _, suffix := range []string{"", "-wal"} {
+		contents, err := os.ReadFile(path + suffix)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			t.Fatalf("reading %s: %v", path+suffix, err)
+		}
+		if bytes.Contains(contents, marker) {
+			t.Errorf("destroyed material is still present in %s", filepath.Base(path+suffix))
+		}
 	}
 }
 

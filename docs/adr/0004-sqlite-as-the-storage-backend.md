@@ -30,11 +30,22 @@ that silently fails to apply is a startup error rather than a wrong assumption:
 | `journal_mode` | `WAL` | Readers do not block the writer |
 | `synchronous` | `FULL` | `fsync` before a commit is acknowledged |
 | `foreign_keys` | `ON` | Off by default in SQLite, which surprises everyone once |
+| `secure_delete` | `ON` | Freed content is zeroed rather than left in the file |
 | `busy_timeout` | `5000` | A short wait instead of an immediate `SQLITE_BUSY` |
 
 `synchronous=FULL` is the durability requirement from the roadmap. `NORMAL`, the usual choice under
 WAL, can lose recently committed transactions on power loss. For a secret store, acknowledging a
 write that later disappears is worse than being slower.
+
+`secure_delete=ON` is the difference between deleting a row and erasing it. Without it, overwriting a
+ciphertext at the SQL level leaves the previous bytes in the database file as free space until a
+`VACUUM` happens to reuse the page — so a destroyed secret would still be recoverable from the file.
+It costs write throughput on every write, not only on deletes, and that cost is accepted: a store
+whose destroy operation does not destroy is worse than a slower one.
+
+The behaviour is asserted by reading the raw database and write-ahead log files after a destroy and
+failing if the material is still present. That test fails when the pragma is removed, which is the
+only reason to trust it.
 
 `SetMaxOpenConns(1)` serialises writes so write ordering is predictable and `SQLITE_BUSY` never has
 to be handled by hand. This matches the convention already used in `marstack-cloud`.

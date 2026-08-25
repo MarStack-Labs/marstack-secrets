@@ -39,4 +39,17 @@ var migrations = []sqlite.Migration{
 			ALTER TABLE auth_tokens ADD COLUMN consumed_at TEXT;
 		`,
 	},
+	{
+		Name: "0003_spent_assertions",
+		SQL: `
+			CREATE TABLE auth_spent_assertions (
+				id         TEXT NOT NULL PRIMARY KEY,
+				identity   TEXT NOT NULL,
+				spent_at   TEXT NOT NULL,
+				expires_at TEXT NOT NULL
+			);
+
+			CREATE INDEX auth_spent_assertions_by_expiry ON auth_spent_assertions (expires_at);
+		`,
+	},
 }

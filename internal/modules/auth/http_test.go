@@ -16,7 +16,7 @@ import (
 func newTestModule(t *testing.T) (*Module, *Manager, *clock) {
 	t.Helper()
 	manager, tick, _ := newTestManager(t)
-	return NewModule(manager, slog.New(slog.NewJSONHandler(io.Discard, nil))), manager, tick
+	return NewModule(manager, slog.New(slog.NewJSONHandler(io.Discard, nil)), nil), manager, tick
 }
 
 func handlerFor(t *testing.T, module *Module) http.Handler {
@@ -56,6 +56,52 @@ func get(t *testing.T, handler http.Handler, path, bearer string) *httptest.Resp
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
 	return recorder
+}
+
+func TestInstanceLoginIsNotRoutedWhenUnconfigured(t *testing.T) {
+	module, _, _ := newTestModule(t)
+	handler := handlerFor(t, module)
+
+	recorder := post(t, handler, pathInstanceLogin, instanceLoginRequest{Assertion: "x"}, "")
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d when no control plane is configured", recorder.Code, http.StatusNotFound)
+	}
+}
+
+func TestInstanceLoginOverHTTP(t *testing.T) {
+	manager, tick, control := instanceSetup(t)
+	module := NewModule(manager, slog.New(slog.NewJSONHandler(io.Discard, nil)), control.verifier)
+	handler := handlerFor(t, module)
+
+	assertion := control.assert(t, "instance/web-01", "prod", tick.at)
+
+	recorder := post(t, handler, pathInstanceLogin, instanceLoginRequest{Assertion: string(assertion)}, "")
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+
+	var response loginResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decoding the response: %v", err)
+	}
+
+	replay := post(t, handler, pathInstanceLogin, instanceLoginRequest{Assertion: string(assertion)}, "")
+	if replay.Code != http.StatusUnauthorized {
+		t.Fatalf("a replayed assertion returned %d, want %d", replay.Code, http.StatusUnauthorized)
+	}
+
+	self := get(t, handler, pathSelf, response.Token)
+	if self.Code != http.StatusOK {
+		t.Fatalf("the instance session cannot reach a protected endpoint: %d %s", self.Code, self.Body.String())
+	}
+
+	var identity selfResponse
+	if err := json.Unmarshal(self.Body.Bytes(), &identity); err != nil {
+		t.Fatalf("decoding the self response: %v", err)
+	}
+	if identity.Identity != "instance/web-01" || identity.Tenant != "prod" || identity.Kind != "instance" {
+		t.Errorf("self = %+v", identity)
+	}
 }
 
 func TestBootstrapLoginReturnsASessionToken(t *testing.T) {

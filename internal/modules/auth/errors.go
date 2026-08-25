@@ -12,4 +12,7 @@ var (
 	ErrInvalidTenant    = errors.New("auth: tenant is empty or too long")
 	ErrInvalidTTL       = errors.New("auth: time to live must be positive and within the maximum")
 	ErrIdentityDisabled = errors.New("auth: identity is disabled")
+	ErrReplayed         = errors.New("auth: assertion has already been used")
+	ErrTenantMismatch   = errors.New("auth: assertion claims a different tenant than the registered identity")
+	ErrKindMismatch     = errors.New("auth: identity is registered with a different kind")
 )

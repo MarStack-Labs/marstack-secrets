@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"os"
 	"path/filepath"
 
 	"github.com/marstack-labs/marstack-secrets/internal/modules/auth"
@@ -13,6 +14,7 @@ import (
 	"github.com/marstack-labs/marstack-secrets/internal/modules/seal"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/config"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/httpx"
+	"github.com/marstack-labs/marstack-secrets/internal/platform/jwt"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/sqlite"
 )
 
@@ -57,6 +59,14 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*App, err
 		return nil, errors.Join(err, db.Close())
 	}
 
+	assertions, err := instanceVerifier(cfg)
+	if err != nil {
+		return nil, errors.Join(err, db.Close())
+	}
+	if assertions == nil {
+		logger.Warn("instance logins are disabled; set MARSEC_CONTROL_PLANE_ISSUER and MARSEC_CONTROL_PLANE_JWKS_FILE to accept them")
+	}
+
 	return &App{
 		cfg:    cfg,
 		logger: logger,
@@ -65,7 +75,7 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*App, err
 		modules: []Module{
 			health.New(),
 			seal.NewModule(sealManager, logger),
-			auth.NewModule(authManager, logger),
+			auth.NewModule(authManager, logger, assertions),
 		},
 	}, nil
 }
@@ -120,6 +130,28 @@ func (a *App) Run(ctx context.Context) error {
 		AllowInsecureHTTP: a.cfg.AllowInsecureHTTP,
 		ShutdownTimeout:   a.cfg.ShutdownTimeout,
 	}, a.Handler(), a.logger)
+}
+
+func instanceVerifier(cfg config.Config) (auth.Assertions, error) {
+	if !cfg.InstanceLoginConfigured() {
+		return nil, nil
+	}
+
+	raw, err := os.ReadFile(cfg.ControlPlaneJWKSFile)
+	if err != nil {
+		return nil, err
+	}
+	keys, err := jwt.ParseJWKS(raw)
+	if err != nil {
+		return nil, err
+	}
+
+	return jwt.NewVerifier(jwt.Options{
+		Keys:     keys,
+		Issuer:   cfg.ControlPlaneIssuer,
+		Audience: cfg.ControlPlaneAudience,
+		Skew:     cfg.ControlPlaneSkew,
+	})
 }
 
 func requireUnsealed(unsealed func() bool, allowed map[string]struct{}) httpx.Middleware {

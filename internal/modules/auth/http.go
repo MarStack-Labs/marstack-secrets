@@ -14,6 +14,7 @@ import (
 
 const (
 	pathBootstrapLogin = "/v1/auth/bootstrap/login"
+	pathInstanceLogin  = "/v1/auth/instance/login"
 	pathSelf           = "/v1/auth/self"
 	pathLogout         = "/v1/auth/logout"
 
@@ -22,12 +23,17 @@ const (
 )
 
 type Module struct {
-	manager *Manager
-	logger  *slog.Logger
+	manager    *Manager
+	logger     *slog.Logger
+	assertions Assertions
 }
 
 type loginRequest struct {
 	Token string `json:"token"`
+}
+
+type instanceLoginRequest struct {
+	Assertion string `json:"assertion"`
 }
 
 type loginResponse struct {
@@ -41,8 +47,8 @@ type selfResponse struct {
 	Tenant   string `json:"tenant"`
 }
 
-func NewModule(manager *Manager, logger *slog.Logger) *Module {
-	return &Module{manager: manager, logger: logger}
+func NewModule(manager *Manager, logger *slog.Logger, assertions Assertions) *Module {
+	return &Module{manager: manager, logger: logger, assertions: assertions}
 }
 
 func (m *Module) Name() string {
@@ -51,6 +57,9 @@ func (m *Module) Name() string {
 
 func (m *Module) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST "+pathBootstrapLogin, m.handleBootstrapLogin)
+	if m.assertions != nil {
+		mux.HandleFunc("POST "+pathInstanceLogin, m.handleInstanceLogin)
+	}
 	mux.Handle("GET "+pathSelf, m.Require(http.HandlerFunc(m.handleSelf)))
 	mux.Handle("POST "+pathLogout, m.Require(http.HandlerFunc(m.handleLogout)))
 }
@@ -90,11 +99,7 @@ func (m *Module) handleBootstrapLogin(w http.ResponseWriter, r *http.Request) {
 
 	session, err := m.manager.Exchange(r.Context(), presented, NoBinding, DefaultTTL)
 	if err != nil {
-		if !errors.Is(err, ErrUnauthenticated) {
-			m.logger.Error("exchanging a bootstrap token",
-				"request_id", httpx.RequestIDFrom(r.Context()), "error", err)
-		}
-		unauthorized(w)
+		m.refuse(w, r, "exchanging a bootstrap token", err)
 		return
 	}
 	defer session.Value.Zero()
@@ -106,6 +111,44 @@ func (m *Module) handleBootstrapLogin(w http.ResponseWriter, r *http.Request) {
 		Token:     string(session.Value),
 		ExpiresAt: session.ExpiresAt.UTC().Format(time.RFC3339),
 	})
+}
+
+func (m *Module) handleInstanceLogin(w http.ResponseWriter, r *http.Request) {
+	var request instanceLoginRequest
+	if err := httpx.DecodeJSON(w, r, &request); err != nil {
+		httpx.Problem(w, http.StatusBadRequest, "malformed_body")
+		return
+	}
+
+	session, err := m.manager.LoginInstance(r.Context(), m.assertions, []byte(request.Assertion))
+	if err != nil {
+		m.refuse(w, r, "verifying an instance assertion", err)
+		return
+	}
+	defer session.Value.Zero()
+
+	m.logger.Info("instance authenticated",
+		"request_id", httpx.RequestIDFrom(r.Context()), "identity", session.Identity)
+
+	httpx.JSON(w, http.StatusOK, loginResponse{
+		Token:     string(session.Value),
+		ExpiresAt: session.ExpiresAt.UTC().Format(time.RFC3339),
+	})
+}
+
+func (m *Module) refuse(w http.ResponseWriter, r *http.Request, what string, err error) {
+	switch {
+	case errors.Is(err, ErrUnauthenticated),
+		errors.Is(err, ErrReplayed),
+		errors.Is(err, ErrTenantMismatch),
+		errors.Is(err, ErrKindMismatch):
+		m.logger.Warn(what,
+			"request_id", httpx.RequestIDFrom(r.Context()), "reason", err)
+	default:
+		m.logger.Error(what,
+			"request_id", httpx.RequestIDFrom(r.Context()), "error", err)
+	}
+	unauthorized(w)
 }
 
 func (m *Module) handleSelf(w http.ResponseWriter, r *http.Request) {

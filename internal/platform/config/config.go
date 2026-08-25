@@ -23,14 +23,25 @@ type Config struct {
 	ShutdownTimeout        time.Duration
 	AllowInsecureHTTP      bool
 	AllowUnprotectedMemory bool
+
+	ControlPlaneIssuer   string
+	ControlPlaneAudience string
+	ControlPlaneJWKSFile string
+	ControlPlaneSkew     time.Duration
+}
+
+func (c Config) InstanceLoginConfigured() bool {
+	return c.ControlPlaneIssuer != "" || c.ControlPlaneJWKSFile != ""
 }
 
 func Default() Config {
 	return Config{
-		ListenAddr:      "127.0.0.1:8200",
-		DataDir:         "/var/lib/marstack-secrets",
-		LogLevel:        "info",
-		ShutdownTimeout: 15 * time.Second,
+		ListenAddr:           "127.0.0.1:8200",
+		DataDir:              "/var/lib/marstack-secrets",
+		LogLevel:             "info",
+		ShutdownTimeout:      15 * time.Second,
+		ControlPlaneAudience: "marstack-secrets",
+		ControlPlaneSkew:     30 * time.Second,
 	}
 }
 
@@ -61,6 +72,16 @@ func Load(getenv Getenv) (Config, error) {
 	}
 	cfg.AllowUnprotectedMemory = unprotected
 
+	cfg.ControlPlaneIssuer = stringVar(getenv, "CONTROL_PLANE_ISSUER", cfg.ControlPlaneIssuer)
+	cfg.ControlPlaneAudience = stringVar(getenv, "CONTROL_PLANE_AUDIENCE", cfg.ControlPlaneAudience)
+	cfg.ControlPlaneJWKSFile = stringVar(getenv, "CONTROL_PLANE_JWKS_FILE", cfg.ControlPlaneJWKSFile)
+
+	skew, err := durationVar(getenv, "CONTROL_PLANE_SKEW", cfg.ControlPlaneSkew)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.ControlPlaneSkew = skew
+
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
 	}
@@ -83,6 +104,19 @@ func (c Config) Validate() error {
 	}
 	if c.ShutdownTimeout <= 0 {
 		problems = append(problems, errors.New("shutdown timeout must be greater than zero"))
+	}
+
+	if c.InstanceLoginConfigured() {
+		switch {
+		case c.ControlPlaneIssuer == "":
+			problems = append(problems, errors.New("control plane issuer is required to accept instance logins"))
+		case c.ControlPlaneJWKSFile == "":
+			problems = append(problems, errors.New("control plane key set file is required to accept instance logins"))
+		case c.ControlPlaneAudience == "":
+			problems = append(problems, errors.New("control plane audience must not be empty"))
+		case c.ControlPlaneSkew < 0:
+			problems = append(problems, errors.New("control plane clock skew must not be negative"))
+		}
 	}
 
 	switch {

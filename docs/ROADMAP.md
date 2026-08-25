@@ -88,10 +88,22 @@ plumbing belong to the platform while the auth module keeps the storage and the 
 Auth endpoints are refused while sealed. A session for a store that can decrypt nothing is not worth
 issuing, so they are not on the sealed allowlist.
 
-Still to come in M3: instance identity verified against the control plane:
-signature over JWKS,
-expiry with a bounded clock skew, single-use `jti`, audience check, and a liveness check against the
-control plane. Tokens are bound to the instance that obtained them. Rate limiting per identity.
+Instance identity is done. A workload presents the assertion its control plane signed at
+`POST /v1/auth/instance/login` and receives a session token. The assertion is verified strictly
+(see `internal/platform/jwt`), its `jti` is spent inside the same transaction that issues the
+session, and the instance is enrolled on first login. An instance cannot change tenant, cannot take
+over an identity registered with another kind, and cannot log in once disabled. The endpoint is only
+routed when a control plane is configured, so an unconfigured store answers `404` rather than
+advertising a login it cannot perform.
+
+Token binding is recorded but not enforced, and that is worth stating plainly. A binding only means
+something if the server observes it rather than being told; a stolen token used elsewhere would
+present the same instance name, which is public. Enforcement therefore waits for mTLS, where the
+client certificate is the observed value. Until then instance sessions are issued unbound, and a test
+asserts that rather than leaving a control in place that cannot be enforced.
+
+Still to come in M3: rate limiting per identity, and a liveness check against the control plane so a
+destroyed instance cannot spend an assertion that is still inside its expiry window.
 
 No new secret types or engines are added before M3 is finished. If authentication is wrong, the rest
 is decoration.

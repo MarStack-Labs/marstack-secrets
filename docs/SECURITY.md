@@ -52,6 +52,10 @@ requests cannot be verified while Actions are off.
 | Login attempts are limited per source address, taken from the connection | A client cannot pick its own rate limit bucket by setting a header |
 | Authenticated requests are limited per identity, after authentication | Unauthenticated traffic cannot exhaust a real identity's budget |
 | The rate limiter tracks a bounded number of keys | An attacker cannot grow the table into a memory exhaustion |
+| Authorization runs before storage is touched | A refusal is identical whether the path exists or not |
+| Refusals carry no reason; the reason goes to the log | A client cannot map policy structure by probing |
+| Tenant isolation is checked before policies load | No rule, however broad, can reach another tenant |
+| Stored policies are revalidated on read | A policy edited in the database is refused, not honoured |
 
 ## Data at rest
 
@@ -102,9 +106,8 @@ inside the boundary:
 - Swap. Disabled at deployment time as a second line behind `mlock`; see
   [DEPLOYMENT.md](DEPLOYMENT.md).
 
-Explicitly outside the current scope, because the corresponding features do not exist yet:
-authorisation and audit logging. Until they land, nothing but the seal and auth endpoints is
-reachable over HTTP.
+Explicitly outside the current scope, because the corresponding features do not exist yet: audit
+logging, and leases that would bound how long a granted read stays valid.
 
 Local root on the host is inside the boundary by design: `marsec operator` writes to the database
 directly, which is how the first credential comes into existence at all.

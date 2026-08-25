@@ -29,6 +29,8 @@ func runOperator(ctx context.Context, out io.Writer, args []string) error {
 		return runIdentity(ctx, out, args[1:])
 	case "bootstrap":
 		return runBootstrap(ctx, out, args[1:])
+	case "policy":
+		return runPolicy(ctx, out, args[1:])
 	default:
 		operatorUsage()
 		return fmt.Errorf("unknown operator subcommand %q", args[0])
@@ -173,6 +175,11 @@ Usage:
   marsec operator identity add <id> --tenant <tenant> [--kind <kind>]
   marsec operator identity disable <id>
   marsec operator bootstrap <identity-id> [--ttl 5m]
+  marsec operator policy put <name> --tenant <tenant> --rules <file>
+  marsec operator policy list --tenant <tenant>
+  marsec operator policy delete <name> --tenant <tenant>
+  marsec operator policy bind <identity> --tenant <tenant> --policy <name>
+  marsec operator policy unbind <identity> --tenant <tenant> --policy <name>
 
 These commands write to the database directly and need filesystem access to the
 data directory. They do not need the store to be unsealed. The data directory

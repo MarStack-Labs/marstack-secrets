@@ -115,11 +115,27 @@ own expiry, and the check needs an endpoint the control plane does not expose ye
 No new secret types or engines are added before M3 is finished. If authentication is wrong, the rest
 is decoration.
 
-## M4 — Authorisation
+## M4 — Authorisation (done)
 
-Policies as path patterns plus capabilities, default deny, `deny` always winning. Tenant isolation
-checked before policy evaluation. A `policy check` endpoint that explains which rule decided and
-why — the first question during an incident.
+Policies are path patterns plus capabilities, in `internal/modules/policy`. Default deny, an explicit
+denial anywhere wins outright, and otherwise the most specific matching rule decides alone. The
+outcome does not depend on the order rules or policies are listed in, which is what makes a policy
+set reviewable.
+
+Tenant isolation is checked before any policy is loaded, so no rule can grant its way across the
+boundary. A stored policy is revalidated when it is read rather than trusted because it was valid
+when written.
+
+Secret endpoints are open behind authentication and policy. Authorization happens before storage is
+touched, so a refusal is identical whether the path exists or not. The client is told nothing about
+why; `POST /v1/sys/policies/check` returns the reason, but only about the caller's own access.
+
+The authentication middleware reaches the secret and policy modules as an injected middleware rather
+than an import, since modules cannot import each other. The composition root owns both and hands the
+guard over.
+
+Undelete and destroy remain reachable only from Go and the operator CLI. Nothing needs them over HTTP
+yet, and the capability set they would use is already in the engine.
 
 ## M5 — Leases
 

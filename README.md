@@ -12,10 +12,10 @@ with a bounded lifetime, and every read is recorded in a tamper-evident audit lo
 
 ## Status
 
-Early development. The server starts sealed, can be initialized and unsealed, and stores versioned
-encrypted secrets through its Go API. Secrets are not reachable over HTTP yet: an endpoint before
-authentication exists would be an unauthenticated secret endpoint. See
-[docs/ROADMAP.md](docs/ROADMAP.md).
+Early development, but usable end to end: the server starts sealed, is initialized and unsealed with
+Shamir shares, authenticates workloads, and serves versioned encrypted secrets behind policy. See
+[docs/ROADMAP.md](docs/ROADMAP.md) for what is still missing, most notably leases, the parameter
+store, and audit logging.
 
 | Endpoint | Description |
 |---|---|
@@ -27,6 +27,11 @@ authentication exists would be an unauthenticated secret endpoint. See
 | `POST /v1/auth/instance/login` | Trades a control plane assertion for a session token, when configured |
 | `GET /v1/auth/self` | The identity behind the presented token |
 | `POST /v1/auth/logout` | Revokes the presented token |
+| `GET /v1/secret/data/{tenant}/{path...}` | Reads a secret, optionally `?version=N` |
+| `PUT /v1/secret/data/{tenant}/{path...}` | Writes a new version, optionally with `cas` |
+| `DELETE /v1/secret/data/{tenant}/{path...}` | Reversibly deletes the current version |
+| `GET /v1/secret/metadata/{tenant}/{path...}` | Version and lifecycle information |
+| `POST /v1/sys/policies/check` | Explains what the caller may do and why |
 
 Every other path answers `503 sealed` until the store is unsealed. A path that no module registered
 answers `404 not_found` whether or not it exists, so the route table stays private.
@@ -77,6 +82,38 @@ curl -s -X POST http://127.0.0.1:8200/v1/auth/bootstrap/login -d '{"token":"mss_
 
 curl -s http://127.0.0.1:8200/v1/auth/self -H 'Authorization: Bearer mss_zUg_...'
 {"identity":"instance/web-01","kind":"instance","tenant":"prod"}
+```
+
+Grant it something to do, then use it:
+
+```sh
+cat > writer.json <<'RULES'
+[{"Path":"secret/prod/*","Capabilities":["read","write","delete"]},
+ {"Path":"secret/prod/locked/*","Capabilities":["deny"]}]
+RULES
+
+marsec operator policy put writer --tenant prod --rules writer.json
+marsec operator policy bind service/ci --tenant prod --policy writer
+```
+
+```sh
+curl -s -X PUT http://127.0.0.1:8200/v1/secret/data/prod/payment-api \
+  -H 'Authorization: Bearer mss_zUg_...' -d '{"value":"db_password=s3cr3t"}'
+{"version":1}
+
+curl -s http://127.0.0.1:8200/v1/secret/data/prod/payment-api \
+  -H 'Authorization: Bearer mss_zUg_...'
+{"value":"db_password=s3cr3t","version":1,"created_at":"2026-08-25T12:28:27Z"}
+```
+
+A refusal says nothing about why, or about whether the path exists. Ask the store instead:
+
+```sh
+curl -s -X POST http://127.0.0.1:8200/v1/sys/policies/check \
+  -H 'Authorization: Bearer mss_zUg_...' \
+  -d '{"tenant":"prod","path":"secret/prod/locked/x","capability":"read"}'
+{"allowed":false,"policy":"writer","rule":"secret/prod/locked/*",
+ "reason":"an explicitly denying rule matched, and denial always wins","policies":["writer"]}
 ```
 
 Positional arguments come before flags in `marsec operator`, because Go's flag parsing stops at the

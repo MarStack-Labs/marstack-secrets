@@ -42,6 +42,9 @@ requests cannot be verified while Actions are off.
 | Request identifiers are generated, never taken from the client | A client-supplied identifier is attacker-controlled log content |
 | Errors returned to clients are opaque codes | Internal detail belongs in the server log, not the response body |
 | `GET /v1/sys/health` returns only `{"status":"ok"}` | Version and build detail are reconnaissance |
+| Every path is refused while sealed unless a module opted it in | A route added later is protected by default rather than by remembering |
+| Unregistered paths answer `404` rather than `405` | A method mismatch does not confirm that a path exists |
+| Request bodies are capped and reject unknown fields | Removes a trivial denial of service and catches misspelled fields |
 
 ## Data at rest
 

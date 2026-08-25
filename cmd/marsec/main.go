@@ -53,7 +53,17 @@ func serve() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	return app.New(cfg, logger).Run(ctx)
+	application, err := app.New(ctx, cfg, logger)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := application.Close(); err != nil {
+			logger.Error("closing the application", "error", err)
+		}
+	}()
+
+	return application.Run(ctx)
 }
 
 func usage() {

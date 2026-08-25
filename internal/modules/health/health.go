@@ -6,6 +6,8 @@ import (
 	"github.com/marstack-labs/marstack-secrets/internal/platform/httpx"
 )
 
+const path = "/v1/sys/health"
+
 type Module struct{}
 
 type status struct {
@@ -21,7 +23,11 @@ func (m *Module) Name() string {
 }
 
 func (m *Module) Register(mux *http.ServeMux) {
-	mux.HandleFunc("GET /v1/sys/health", m.handleHealth)
+	mux.HandleFunc("GET "+path, m.handleHealth)
+}
+
+func (m *Module) PathsAllowedWhileSealed() []string {
+	return []string{path}
 }
 
 func (m *Module) handleHealth(w http.ResponseWriter, r *http.Request) {

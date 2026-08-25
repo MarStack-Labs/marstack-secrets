@@ -109,6 +109,10 @@ func (m *Manager) Unseal(ctx context.Context, share crypto.Sensitive) (Status, e
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if len(share) < 2 {
+		return Status{}, ErrInvalidShare
+	}
+
 	stored, err := m.readConfig(ctx)
 	if err != nil {
 		return Status{}, err
@@ -118,9 +122,6 @@ func (m *Manager) Unseal(ctx context.Context, share crypto.Sensitive) (Status, e
 	}
 	if m.root != nil {
 		return m.statusLocked(stored), nil
-	}
-	if len(share) < 2 {
-		return Status{}, ErrInvalidShare
 	}
 	if m.alreadyCollected(share) {
 		return m.statusLocked(stored), nil
@@ -175,6 +176,12 @@ func (m *Manager) Status(ctx context.Context) (Status, error) {
 
 func (m *Manager) Cipher() *Cipher {
 	return &Cipher{manager: m}
+}
+
+func (m *Manager) IsUnsealed() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.root != nil
 }
 
 func (m *Manager) deriveKEK(tenant string, version int) (crypto.Key, error) {

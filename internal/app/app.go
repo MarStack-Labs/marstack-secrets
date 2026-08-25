@@ -2,33 +2,67 @@ package app
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 
 	"github.com/marstack-labs/marstack-secrets/internal/modules/health"
+	"github.com/marstack-labs/marstack-secrets/internal/modules/seal"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/config"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/httpx"
+	"github.com/marstack-labs/marstack-secrets/internal/platform/sqlite"
 )
+
+const databaseFile = "marsec.db"
 
 type Module interface {
 	Name() string
 	Register(mux *http.ServeMux)
 }
 
+type SealTolerant interface {
+	PathsAllowedWhileSealed() []string
+}
+
 type App struct {
 	cfg     config.Config
 	logger  *slog.Logger
+	db      *sql.DB
+	seal    *seal.Manager
 	modules []Module
 }
 
-func New(cfg config.Config, logger *slog.Logger) *App {
+func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*App, error) {
+	db, err := sqlite.Open(ctx, filepath.Join(cfg.DataDir, databaseFile))
+	if err != nil {
+		return nil, err
+	}
+
+	manager, err := seal.NewManager(db, seal.Options{})
+	if err != nil {
+		return nil, errors.Join(err, db.Close())
+	}
+	if err := manager.Migrate(ctx); err != nil {
+		return nil, errors.Join(err, db.Close())
+	}
+
 	return &App{
 		cfg:    cfg,
 		logger: logger,
+		db:     db,
+		seal:   manager,
 		modules: []Module{
 			health.New(),
+			seal.NewModule(manager, logger),
 		},
-	}
+	}, nil
+}
+
+func (a *App) Close() error {
+	a.seal.Seal()
+	return a.db.Close()
 }
 
 func (a *App) ModuleNames() []string {
@@ -41,15 +75,25 @@ func (a *App) ModuleNames() []string {
 
 func (a *App) Handler() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		httpx.Problem(w, http.StatusNotFound, "not_found")
+	})
+	allowedWhileSealed := make(map[string]struct{})
+
 	for _, module := range a.modules {
 		module.Register(mux)
+		for _, path := range pathsAllowedWhileSealed(module) {
+			allowedWhileSealed[path] = struct{}{}
+		}
 		a.logger.Debug("module registered", "module", module.Name())
 	}
+
 	return httpx.Chain(mux,
 		httpx.Recover(a.logger),
 		httpx.RequestID,
 		httpx.SecurityHeaders,
 		httpx.AccessLog(a.logger),
+		requireUnsealed(a.seal.IsUnsealed, allowedWhileSealed),
 	)
 }
 
@@ -57,6 +101,8 @@ func (a *App) Run(ctx context.Context) error {
 	if a.cfg.AllowInsecureHTTP {
 		a.logger.Warn("serving plaintext HTTP; this is for local development only")
 	}
+	a.logger.Info("server starting sealed", "modules", a.ModuleNames())
+
 	return httpx.Serve(ctx, httpx.ServerConfig{
 		Addr:              a.cfg.ListenAddr,
 		TLSCertFile:       a.cfg.TLSCertFile,
@@ -64,4 +110,24 @@ func (a *App) Run(ctx context.Context) error {
 		AllowInsecureHTTP: a.cfg.AllowInsecureHTTP,
 		ShutdownTimeout:   a.cfg.ShutdownTimeout,
 	}, a.Handler(), a.logger)
+}
+
+func requireUnsealed(unsealed func() bool, allowed map[string]struct{}) httpx.Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if _, permitted := allowed[r.URL.Path]; permitted || unsealed() {
+				next.ServeHTTP(w, r)
+				return
+			}
+			httpx.Problem(w, http.StatusServiceUnavailable, "sealed")
+		})
+	}
+}
+
+func pathsAllowedWhileSealed(module Module) []string {
+	tolerant, ok := module.(SealTolerant)
+	if !ok {
+		return nil
+	}
+	return tolerant.PathsAllowedWhileSealed()
 }

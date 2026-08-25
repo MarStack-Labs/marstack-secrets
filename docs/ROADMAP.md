@@ -52,9 +52,14 @@ is written anywhere.
 other; the composition root puts them together, which is exactly the arrangement ADR 0001 exists to
 allow.
 
-Still to come in M2: the process boots sealed and serves only `sys/health`, `sys/seal-status`, and
-`sys/unseal`. `mlock`ed memory and zeroing on shutdown. Auto-seal when the audit sink fails.
-`systemd` unit and host hardening.
+The sealed boot is done. The process starts sealed and a middleware refuses every path that no module
+declared safe while sealed. The allowlist is not a central list: a module states its own tolerant
+paths through an optional interface, the same way it owns its routes and its schema. The gate exists
+before there is anything to gate, so a route added in M3 is refused by default rather than by
+remembering to add it.
+
+Still to come in M2: `mlock`ed memory and zeroing on shutdown, auto-seal when the audit sink fails,
+the `systemd` unit and host hardening.
 
 ## M3 — Authentication
 

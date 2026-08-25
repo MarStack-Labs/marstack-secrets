@@ -207,6 +207,19 @@ func TestUnsealRejectsMalformedShares(t *testing.T) {
 	}
 }
 
+func TestUnsealValidatesTheShareWhateverTheState(t *testing.T) {
+	manager, _ := newManager(t)
+
+	if _, err := manager.Unseal(t.Context(), crypto.Sensitive{0x01}); !errors.Is(err, ErrInvalidShare) {
+		t.Errorf("Unseal on an uninitialized store = %v, want ErrInvalidShare", err)
+	}
+
+	open, _, _ := initialized(t)
+	if _, err := open.Unseal(t.Context(), crypto.Sensitive{0x01}); !errors.Is(err, ErrInvalidShare) {
+		t.Errorf("Unseal on an open store = %v, want ErrInvalidShare", err)
+	}
+}
+
 func TestUnsealIsIdempotentOnceOpen(t *testing.T) {
 	manager, shares, _ := initialized(t)
 

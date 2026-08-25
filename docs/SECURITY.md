@@ -56,6 +56,9 @@ requests cannot be verified while Actions are off.
 | Refusals carry no reason; the reason goes to the log | A client cannot map policy structure by probing |
 | Tenant isolation is checked before policies load | No rule, however broad, can reach another tenant |
 | Stored policies are revalidated on read | A policy edited in the database is refused, not honoured |
+| Auditing cannot be turned off | There is no configuration that disables it, only one that moves the file |
+| A record that cannot be written refuses the request | A served secret is always a recorded secret |
+| A failing audit sink seals the store | The failure stops at the first request rather than accumulating |
 
 ## Data at rest
 
@@ -76,6 +79,8 @@ requests cannot be verified while Actions are off.
 - Key material is redacted through `String`, `GoString`, every `fmt` verb, `slog`, and `json.Marshal`.
 - Decryption returns one opaque error for a wrong key, a moved ciphertext, and a tampered blob alike.
 - A plaintext never reaches the database.
+- A read with a broken audit sink returns 503 and no value, and leaves the store sealed.
+- Every secret access, allowed or refused, appears in the log with its version.
 - Destroyed material is absent from the raw database and write-ahead log files.
 
 ## Process protections

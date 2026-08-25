@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/marstack-labs/marstack-secrets/internal/platform/audit"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/authn"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/crypto"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/httpx"
@@ -26,6 +27,7 @@ type Module struct {
 	manager    *Manager
 	logger     *slog.Logger
 	assertions Assertions
+	audit      audit.Sink
 	logins     httpx.Allower
 	requests   httpx.Allower
 }
@@ -33,6 +35,10 @@ type Module struct {
 type Limits struct {
 	Logins   httpx.Allower
 	Requests httpx.Allower
+}
+
+type Recording struct {
+	Sink audit.Sink
 }
 
 type loginRequest struct {
@@ -54,14 +60,29 @@ type selfResponse struct {
 	Tenant   string `json:"tenant"`
 }
 
-func NewModule(manager *Manager, logger *slog.Logger, assertions Assertions, limits Limits) *Module {
+func NewModule(manager *Manager, logger *slog.Logger, assertions Assertions, limits Limits, recording Recording) *Module {
 	return &Module{
 		manager:    manager,
 		logger:     logger,
 		assertions: assertions,
+		audit:      recording.Sink,
 		logins:     limits.Logins,
 		requests:   limits.Requests,
 	}
+}
+
+func (m *Module) record(r *http.Request, operation, identity, tenant, result string) error {
+	if m.audit == nil {
+		return nil
+	}
+	return m.audit.Append(r.Context(), audit.Event{
+		Operation: operation,
+		Identity:  identity,
+		Tenant:    tenant,
+		Result:    result,
+		RequestID: httpx.RequestIDFrom(r.Context()),
+		SourceIP:  httpx.RemoteIP(r),
+	})
 }
 
 func (m *Module) Name() string {
@@ -125,10 +146,16 @@ func (m *Module) handleBootstrapLogin(w http.ResponseWriter, r *http.Request) {
 
 	session, err := m.manager.Exchange(r.Context(), presented, NoBinding, DefaultTTL)
 	if err != nil {
+		_ = m.record(r, "auth.bootstrap.login", "", "", audit.ResultDeny)
 		m.refuse(w, r, "exchanging a bootstrap token", err)
 		return
 	}
 	defer session.Value.Zero()
+
+	if err := m.record(r, "auth.bootstrap.login", session.Identity.ID, session.Identity.Tenant, audit.ResultAllow); err != nil {
+		m.unrecorded(w, r, err)
+		return
+	}
 
 	m.logger.Info("bootstrap token exchanged",
 		"request_id", httpx.RequestIDFrom(r.Context()), "identity", session.Identity)
@@ -148,10 +175,16 @@ func (m *Module) handleInstanceLogin(w http.ResponseWriter, r *http.Request) {
 
 	session, err := m.manager.LoginInstance(r.Context(), m.assertions, []byte(request.Assertion))
 	if err != nil {
+		_ = m.record(r, "auth.instance.login", "", "", audit.ResultDeny)
 		m.refuse(w, r, "verifying an instance assertion", err)
 		return
 	}
 	defer session.Value.Zero()
+
+	if err := m.record(r, "auth.instance.login", session.Identity.ID, session.Identity.Tenant, audit.ResultAllow); err != nil {
+		m.unrecorded(w, r, err)
+		return
+	}
 
 	m.logger.Info("instance authenticated",
 		"request_id", httpx.RequestIDFrom(r.Context()), "identity", session.Identity)
@@ -160,6 +193,12 @@ func (m *Module) handleInstanceLogin(w http.ResponseWriter, r *http.Request) {
 		Token:     string(session.Value),
 		ExpiresAt: session.ExpiresAt.UTC().Format(time.RFC3339),
 	})
+}
+
+func (m *Module) unrecorded(w http.ResponseWriter, r *http.Request, err error) {
+	m.logger.Error("the audit sink refused a record; the login is refused with it",
+		"request_id", httpx.RequestIDFrom(r.Context()), "error", err)
+	httpx.Problem(w, http.StatusServiceUnavailable, "audit_unavailable")
 }
 
 func (m *Module) refuse(w http.ResponseWriter, r *http.Request, what string, err error) {

@@ -17,6 +17,7 @@ import (
 	"github.com/marstack-labs/marstack-secrets/internal/modules/policy"
 	"github.com/marstack-labs/marstack-secrets/internal/modules/seal"
 	"github.com/marstack-labs/marstack-secrets/internal/modules/secret"
+	"github.com/marstack-labs/marstack-secrets/internal/platform/audit"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/config"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/httpx"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/jwt"
@@ -41,7 +42,27 @@ type App struct {
 	db      *sql.DB
 	seal    *seal.Manager
 	leases  *lease.Manager
+	audit   *audit.Log
 	modules []Module
+}
+
+type sealingSink struct {
+	sink   audit.Sink
+	seal   *seal.Manager
+	logger *slog.Logger
+}
+
+func (s sealingSink) Append(ctx context.Context, event audit.Event) error {
+	err := s.sink.Append(ctx, event)
+	if err == nil {
+		return nil
+	}
+
+	if s.seal.IsUnsealed() {
+		s.logger.Error("the audit sink failed; sealing the store", "error", err)
+		s.seal.Seal()
+	}
+	return err
 }
 
 type leaseIssuer struct {
@@ -62,14 +83,19 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*App, err
 		return nil, err
 	}
 
-	app, err := assemble(ctx, cfg, logger, db)
+	trail, err := audit.Open(cfg.AuditPath(), audit.Options{})
 	if err != nil {
 		return nil, errors.Join(err, db.Close())
+	}
+
+	app, err := assemble(ctx, cfg, logger, db, trail)
+	if err != nil {
+		return nil, errors.Join(err, trail.Close(), db.Close())
 	}
 	return app, nil
 }
 
-func assemble(ctx context.Context, cfg config.Config, logger *slog.Logger, db *sql.DB) (*App, error) {
+func assemble(ctx context.Context, cfg config.Config, logger *slog.Logger, db *sql.DB, trail *audit.Log) (*App, error) {
 	sealManager, err := seal.NewManager(db, seal.Options{})
 	if err != nil {
 		return nil, err
@@ -127,7 +153,9 @@ func assemble(ctx context.Context, cfg config.Config, logger *slog.Logger, db *s
 		return nil, err
 	}
 
-	authModule := auth.NewModule(authManager, logger, assertions, limits)
+	sink := sealingSink{sink: trail, seal: sealManager, logger: logger}
+
+	authModule := auth.NewModule(authManager, logger, assertions, limits, auth.Recording{Sink: sink})
 	guard := authModule.Require
 
 	return &App{
@@ -136,9 +164,10 @@ func assemble(ctx context.Context, cfg config.Config, logger *slog.Logger, db *s
 		db:     db,
 		seal:   sealManager,
 		leases: leaseManager,
+		audit:  trail,
 		modules: []Module{
 			health.New(),
-			seal.NewModule(sealManager, logger),
+			seal.NewModule(sealManager, logger, sink),
 			authModule,
 			policy.NewModule(policyManager, guard, logger),
 			lease.NewModule(leaseManager, lease.ModuleOptions{
@@ -149,6 +178,7 @@ func assemble(ctx context.Context, cfg config.Config, logger *slog.Logger, db *s
 			secret.NewModule(secretService, secret.ModuleOptions{
 				Authorizer: policyManager,
 				Leases:     leaseIssuer{manager: leaseManager},
+				Audit:      sink,
 				LeaseTTL:   cfg.LeaseTTL,
 				Guard:      guard,
 				Logger:     logger,
@@ -159,7 +189,7 @@ func assemble(ctx context.Context, cfg config.Config, logger *slog.Logger, db *s
 
 func (a *App) Close() error {
 	a.seal.Seal()
-	return a.db.Close()
+	return errors.Join(a.audit.Close(), a.db.Close())
 }
 
 func (a *App) ModuleNames() []string {

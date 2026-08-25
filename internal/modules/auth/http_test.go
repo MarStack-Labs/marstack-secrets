@@ -16,7 +16,7 @@ import (
 func newTestModule(t *testing.T) (*Module, *Manager, *clock) {
 	t.Helper()
 	manager, tick, _ := newTestManager(t)
-	return NewModule(manager, slog.New(slog.NewJSONHandler(io.Discard, nil)), nil, Limits{}), manager, tick
+	return NewModule(manager, slog.New(slog.NewJSONHandler(io.Discard, nil)), nil, Limits{}, Recording{}), manager, tick
 }
 
 func handlerFor(t *testing.T, module *Module) http.Handler {
@@ -70,7 +70,7 @@ func TestInstanceLoginIsNotRoutedWhenUnconfigured(t *testing.T) {
 
 func TestInstanceLoginOverHTTP(t *testing.T) {
 	manager, tick, control := instanceSetup(t)
-	module := NewModule(manager, slog.New(slog.NewJSONHandler(io.Discard, nil)), control.verifier, Limits{})
+	module := NewModule(manager, slog.New(slog.NewJSONHandler(io.Discard, nil)), control.verifier, Limits{}, Recording{})
 	handler := handlerFor(t, module)
 
 	assertion := control.assert(t, "instance/web-01", "prod", tick.at)
@@ -312,7 +312,7 @@ func TestLoginAttemptsAreRateLimitedPerSource(t *testing.T) {
 	manager, tick, _ := newTestManager(t)
 	_ = tick
 	limiter := &countingLimiter{budget: 2}
-	module := NewModule(manager, slog.New(slog.NewJSONHandler(io.Discard, nil)), nil, Limits{Logins: limiter})
+	module := NewModule(manager, slog.New(slog.NewJSONHandler(io.Discard, nil)), nil, Limits{Logins: limiter}, Recording{})
 	handler := handlerFor(t, module)
 
 	for attempt := 1; attempt <= 2; attempt++ {
@@ -337,7 +337,7 @@ func TestLoginAttemptsAreRateLimitedPerSource(t *testing.T) {
 func TestAuthenticatedRequestsAreRateLimitedPerIdentity(t *testing.T) {
 	manager, _, _ := newTestManager(t)
 	limiter := &countingLimiter{budget: 1}
-	module := NewModule(manager, slog.New(slog.NewJSONHandler(io.Discard, nil)), nil, Limits{Requests: limiter})
+	module := NewModule(manager, slog.New(slog.NewJSONHandler(io.Discard, nil)), nil, Limits{Requests: limiter}, Recording{})
 	handler := handlerFor(t, module)
 
 	registered(t, manager, "instance/web-01", authn.KindInstance)
@@ -354,7 +354,7 @@ func TestAuthenticatedRequestsAreRateLimitedPerIdentity(t *testing.T) {
 func TestAnUnauthenticatedRequestDoesNotSpendTheIdentityBudget(t *testing.T) {
 	manager, _, _ := newTestManager(t)
 	limiter := &countingLimiter{budget: 1}
-	module := NewModule(manager, slog.New(slog.NewJSONHandler(io.Discard, nil)), nil, Limits{Requests: limiter})
+	module := NewModule(manager, slog.New(slog.NewJSONHandler(io.Discard, nil)), nil, Limits{Requests: limiter}, Recording{})
 	handler := handlerFor(t, module)
 
 	registered(t, manager, "instance/web-01", authn.KindInstance)

@@ -1,16 +1,21 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/marstack-labs/marstack-secrets/internal/modules/auth"
 	"github.com/marstack-labs/marstack-secrets/internal/modules/policy"
+	"github.com/marstack-labs/marstack-secrets/internal/modules/secret"
+	"github.com/marstack-labs/marstack-secrets/internal/platform/audit"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/authn"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/authz"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/sqlite"
@@ -35,7 +40,13 @@ func newHarness(t *testing.T) *harness {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 
-	application, err := assemble(t.Context(), cfg, logger, db)
+	trail, err := audit.Open(cfg.AuditPath(), audit.Options{})
+	if err != nil {
+		t.Fatalf("opening the audit log: %v", err)
+	}
+	t.Cleanup(func() { _ = trail.Close() })
+
+	application, err := assemble(t.Context(), cfg, logger, db, trail)
 	if err != nil {
 		t.Fatalf("assemble returned error: %v", err)
 	}
@@ -494,5 +505,137 @@ func TestPrefixRevocationNeedsDeleteOnThePrefix(t *testing.T) {
 	}
 	if recorder := h.do(t, http.MethodGet, "/v1/secret/data/prod/payment/db", "", writer); recorder.Code != http.StatusUnauthorized {
 		t.Errorf("the caller kept working after revoking its own prefix: %d", recorder.Code)
+	}
+}
+
+type refusingSink struct {
+	refusing bool
+}
+
+func (s *refusingSink) Append(context.Context, audit.Event) error {
+	if s.refusing {
+		return errors.New("the audit device is full")
+	}
+	return nil
+}
+
+func TestEveryAccessLeavesARecord(t *testing.T) {
+	h := newHarness(t)
+	writer := h.session(t, "service/ci", "prod", writerPolicy(t))
+	stranger := h.session(t, "service/app", "prod")
+
+	h.do(t, http.MethodPut, "/v1/secret/data/prod/db", `{"value":"v"}`, writer)
+	h.do(t, http.MethodGet, "/v1/secret/data/prod/db", "", writer)
+	h.do(t, http.MethodDelete, "/v1/secret/data/prod/db", "", writer)
+	h.do(t, http.MethodGet, "/v1/secret/data/prod/db", "", stranger)
+
+	report, err := audit.Verify(h.app.cfg.AuditPath())
+	if err != nil {
+		t.Fatalf("Verify returned error: %v", err)
+	}
+	if report.Records < 4 {
+		t.Fatalf("the log holds %d records, want at least the four accesses", report.Records)
+	}
+
+	raw, err := os.ReadFile(h.app.cfg.AuditPath())
+	if err != nil {
+		t.Fatalf("reading the log: %v", err)
+	}
+	trail := string(raw)
+
+	for _, expected := range []string{
+		`"op":"secret.write"`,
+		`"op":"secret.read"`,
+		`"op":"secret.delete"`,
+		`"result":"deny"`,
+		`"identity":"service/app"`,
+		`"path":"secret/prod/db"`,
+	} {
+		if !strings.Contains(trail, expected) {
+			t.Errorf("the log is missing %s", expected)
+		}
+	}
+	if strings.Contains(trail, `"v"`) {
+		t.Error("the log carries the written value")
+	}
+}
+
+func TestARefusedRecordRefusesTheRequestAndSealsTheStore(t *testing.T) {
+	cfg := testConfig(t)
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+
+	db, err := sqlite.Open(t.Context(), cfg.DataDir+"/"+DatabaseFile)
+	if err != nil {
+		t.Fatalf("opening the database: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	trail, err := audit.Open(cfg.AuditPath(), audit.Options{})
+	if err != nil {
+		t.Fatalf("opening the audit log: %v", err)
+	}
+	t.Cleanup(func() { _ = trail.Close() })
+
+	application, err := assemble(t.Context(), cfg, logger, db, trail)
+	if err != nil {
+		t.Fatalf("assemble returned error: %v", err)
+	}
+	if _, err := application.seal.Initialize(t.Context(), 3, 2); err != nil {
+		t.Fatalf("Initialize returned error: %v", err)
+	}
+
+	broken := &refusingSink{}
+	guarded := sealingSink{sink: broken, seal: application.seal, logger: logger}
+
+	authManager, err := auth.NewManager(db, auth.Options{})
+	if err != nil {
+		t.Fatalf("NewManager returned error: %v", err)
+	}
+	policyManager, err := policy.NewManager(db, policy.Options{})
+	if err != nil {
+		t.Fatalf("NewManager returned error: %v", err)
+	}
+	h := &harness{app: application, auth: authManager, policy: policyManager}
+
+	store, err := secret.NewStore(db, secret.Options{})
+	if err != nil {
+		t.Fatalf("NewStore returned error: %v", err)
+	}
+	service, err := secret.NewService(store, application.seal.Cipher())
+	if err != nil {
+		t.Fatalf("NewService returned error: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	secret.NewModule(service, secret.ModuleOptions{
+		Authorizer: policyManager,
+		Leases:     leaseIssuer{manager: application.leases},
+		Audit:      guarded,
+		LeaseTTL:   cfg.LeaseTTL,
+		Guard:      auth.NewModule(authManager, logger, nil, auth.Limits{}, auth.Recording{}).Require,
+		Logger:     logger,
+	}).Register(mux)
+	h.handler = mux
+
+	token := h.session(t, "service/ci", "prod", writerPolicy(t))
+
+	if recorder := h.do(t, http.MethodPut, "/v1/secret/data/prod/db", `{"value":"v"}`, token); recorder.Code != http.StatusOK {
+		t.Fatalf("seeding returned %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if !application.seal.IsUnsealed() {
+		t.Fatal("the store should still be open")
+	}
+
+	broken.refusing = true
+
+	recorder := h.do(t, http.MethodGet, "/v1/secret/data/prod/db", "", token)
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("a read with a broken audit sink returned %d, want %d", recorder.Code, http.StatusServiceUnavailable)
+	}
+	if strings.Contains(recorder.Body.String(), "value") {
+		t.Errorf("the secret was served despite the missing record: %s", recorder.Body.String())
+	}
+	if application.seal.IsUnsealed() {
+		t.Error("a failing audit sink did not seal the store")
 	}
 }

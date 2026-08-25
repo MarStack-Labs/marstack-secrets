@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/marstack-labs/marstack-secrets/internal/platform/audit"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/crypto"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/httpx"
 )
@@ -19,6 +20,7 @@ const (
 type Module struct {
 	manager *Manager
 	logger  *slog.Logger
+	audit   audit.Sink
 }
 
 type statusResponse struct {
@@ -42,8 +44,23 @@ type unsealRequest struct {
 	Share string `json:"share"`
 }
 
-func NewModule(manager *Manager, logger *slog.Logger) *Module {
-	return &Module{manager: manager, logger: logger}
+func NewModule(manager *Manager, logger *slog.Logger, sink audit.Sink) *Module {
+	return &Module{manager: manager, logger: logger, audit: sink}
+}
+
+func (m *Module) record(r *http.Request, operation, result string) {
+	if m.audit == nil {
+		return
+	}
+	if err := m.audit.Append(r.Context(), audit.Event{
+		Operation: operation,
+		Result:    result,
+		RequestID: httpx.RequestIDFrom(r.Context()),
+		SourceIP:  httpx.RemoteIP(r),
+	}); err != nil {
+		m.logger.Error("recording a seal operation",
+			"request_id", httpx.RequestIDFrom(r.Context()), "operation", operation, "error", err)
+	}
 }
 
 func (m *Module) Name() string {
@@ -88,6 +105,7 @@ func (m *Module) handleInit(w http.ResponseWriter, r *http.Request) {
 		share.Zero()
 	}
 
+	m.record(r, "seal.initialize", audit.ResultAllow)
 	m.logger.Warn("store initialized; the unseal shares are returned once and never again",
 		"request_id", httpx.RequestIDFrom(r.Context()),
 		"shares", request.Shares,
@@ -112,11 +130,13 @@ func (m *Module) handleUnseal(w http.ResponseWriter, r *http.Request) {
 
 	status, err := m.manager.Unseal(r.Context(), share)
 	if err != nil {
+		m.record(r, "seal.unseal", audit.ResultDeny)
 		m.fail(w, r, err)
 		return
 	}
 
 	if status.State == StateUnsealed {
+		m.record(r, "seal.unseal", audit.ResultAllow)
 		m.logger.Info("store unsealed", "request_id", httpx.RequestIDFrom(r.Context()))
 	}
 	httpx.JSON(w, http.StatusOK, render(status))

@@ -25,6 +25,7 @@ rather than one at a time.
 | `MARSEC_LEASE_TTL` | `30m` | How long a lease issued by a read stays valid |
 | `MARSEC_SWEEP_INTERVAL` | `5m` | Roughly how often expired leases are swept, with jitter |
 | `MARSEC_SWEEP_BATCH` | `500` | Rows removed per sweep, so one pass cannot stall writes |
+| `MARSEC_AUDIT_FILE` | `<data dir>/audit.log` | Where the audit log is written |
 
 ## Validation rules
 
@@ -42,6 +43,8 @@ rather than one at a time.
   `POST /v1/auth/instance/login` unrouted, so an unconfigured store answers `404` instead of
   advertising a login it cannot perform.
 - Values are trimmed, and a value that is only whitespace counts as unset.
+- There is no variable that turns auditing off. It defaults to a path inside the data directory so it
+  is always writable, and a failure to record is a failure to serve.
 - Login attempts are counted per source address, taken from the connection rather than from any
   forwarded header, so a client cannot choose its own bucket. Behind a proxy every request shares the
   proxy's address; put the limit in front of the proxy in that case.

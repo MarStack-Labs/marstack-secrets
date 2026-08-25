@@ -120,6 +120,16 @@ curl -s -X POST http://127.0.0.1:8200/v1/sys/policies/check \
  "reason":"an explicitly denying rule matched, and denial always wins","policies":["writer"]}
 ```
 
+Every access leaves a record, and the chain can be checked at any time:
+
+```sh
+marsec operator audit verify
+/var/lib/marstack-secrets/audit.log verifies: 5 record(s), tip 1e567ff1922d…
+
+marsec operator audit verify --file /tmp/tampered.log
+error: audit: the chain does not verify: expected record 4 but found 5
+```
+
 Positional arguments come before flags in `marsec operator`, because Go's flag parsing stops at the
 first non-flag token.
 

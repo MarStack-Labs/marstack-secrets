@@ -31,6 +31,8 @@ func runOperator(ctx context.Context, out io.Writer, args []string) error {
 		return runBootstrap(ctx, out, args[1:])
 	case "policy":
 		return runPolicy(ctx, out, args[1:])
+	case "audit":
+		return runAudit(ctx, out, args[1:])
 	default:
 		operatorUsage()
 		return fmt.Errorf("unknown operator subcommand %q", args[0])
@@ -180,6 +182,7 @@ Usage:
   marsec operator policy delete <name> --tenant <tenant>
   marsec operator policy bind <identity> --tenant <tenant> --policy <name>
   marsec operator policy unbind <identity> --tenant <tenant> --policy <name>
+  marsec operator audit verify [--file <path>]
 
 These commands write to the database directly and need filesystem access to the
 data directory. They do not need the store to be unsealed. The data directory

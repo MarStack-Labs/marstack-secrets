@@ -179,10 +179,25 @@ marstack-cloud to emit the event, and `RevokeIdentity` is already there to recei
 Typed values, hierarchical inheritance, and references to secrets. A resolved reference is treated as
 a secret: not cached, always audited, and requiring read capability on the referenced path.
 
-## M7 — Audit and metrics
+## M7 — Audit and metrics (in progress)
 
-Hash-chained append-only log, `fsync` before the response is returned, fail closed when the sink is
-unavailable, and a verification command. Prometheus metrics.
+The log is done, in `internal/platform/audit`, and wired through every module that touches a secret.
+Append only, hash chained, `fsync`ed before the response is returned, and carrying no value: the
+Event type has no field for one. Version is recorded, because the incident question is who read which
+value, not who read the secret.
+
+Auditing cannot be turned off. There is no configuration for it, only a path, defaulting inside the
+data directory so it is always writable. A record that cannot be written refuses the request, and a
+failing sink seals the store, which is the auto-seal deferred from M2.
+
+Refusals are recorded too, with the policy and rule that decided. "Who tried and was turned away" is
+the other half of an incident.
+
+What the chain does not do is written down in `docs/SECURITY.md` and pinned by a test: anyone who can
+rewrite the whole file can recompute every hash and pass verification. Closing that needs an anchor
+off the host, which is not built.
+
+Still to come in M7: Prometheus metrics.
 
 ## M8 — Client tooling
 

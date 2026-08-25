@@ -38,6 +38,15 @@ type Config struct {
 	LeaseTTL      time.Duration
 	SweepInterval time.Duration
 	SweepBatch    int
+
+	AuditFile string
+}
+
+func (c Config) AuditPath() string {
+	if c.AuditFile != "" {
+		return c.AuditFile
+	}
+	return filepath.Join(c.DataDir, "audit.log")
 }
 
 func (c Config) InstanceLoginConfigured() bool {
@@ -120,6 +129,7 @@ func Load(getenv Getenv) (Config, error) {
 	if cfg.SweepBatch, err = intVar(getenv, "SWEEP_BATCH", cfg.SweepBatch); err != nil {
 		return Config{}, err
 	}
+	cfg.AuditFile = stringVar(getenv, "AUDIT_FILE", cfg.AuditFile)
 
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
@@ -172,6 +182,9 @@ func (c Config) Validate() error {
 	}
 	if c.SweepBatch < 1 {
 		problems = append(problems, errors.New("sweep batch must be at least one"))
+	}
+	if c.AuditFile != "" && !filepath.IsAbs(c.AuditFile) {
+		problems = append(problems, fmt.Errorf("audit file %q must be an absolute path", c.AuditFile))
 	}
 
 	switch {

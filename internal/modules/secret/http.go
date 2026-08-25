@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/marstack-labs/marstack-secrets/internal/platform/audit"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/authn"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/authz"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/crypto"
@@ -32,6 +33,7 @@ type Module struct {
 	service    *Service
 	authorizer Authorizer
 	leases     Leases
+	audit      audit.Sink
 	leaseTTL   time.Duration
 	guard      httpx.Middleware
 	logger     *slog.Logger
@@ -40,6 +42,7 @@ type Module struct {
 type ModuleOptions struct {
 	Authorizer Authorizer
 	Leases     Leases
+	Audit      audit.Sink
 	LeaseTTL   time.Duration
 	Guard      httpx.Middleware
 	Logger     *slog.Logger
@@ -74,6 +77,7 @@ func NewModule(service *Service, opts ModuleOptions) *Module {
 		service:    service,
 		authorizer: opts.Authorizer,
 		leases:     opts.Leases,
+		audit:      opts.Audit,
 		leaseTTL:   opts.LeaseTTL,
 		guard:      opts.Guard,
 		logger:     opts.Logger,
@@ -122,6 +126,10 @@ func (m *Module) handleRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !m.recorded(w, r, "secret.read", identity, tenant, path, value.Version, audit.ResultAllow, authz.Decision{}) {
+		return
+	}
+
 	httpx.JSON(w, http.StatusOK, readResponse{
 		Value:     string(value.Data),
 		Version:   value.Version,
@@ -160,6 +168,11 @@ func (m *Module) handleWrite(w http.ResponseWriter, r *http.Request) {
 		m.fail(w, r, err)
 		return
 	}
+
+	identity, _ := authn.IdentityFrom(r.Context())
+	if !m.recorded(w, r, "secret.write", identity, tenant, path, version, audit.ResultAllow, authz.Decision{}) {
+		return
+	}
 	httpx.JSON(w, http.StatusOK, writeResponse{Version: version})
 }
 
@@ -171,6 +184,11 @@ func (m *Module) handleDelete(w http.ResponseWriter, r *http.Request) {
 
 	if err := m.service.Delete(r.Context(), tenant, path); err != nil {
 		m.fail(w, r, err)
+		return
+	}
+
+	identity, _ := authn.IdentityFrom(r.Context())
+	if !m.recorded(w, r, "secret.delete", identity, tenant, path, 0, audit.ResultAllow, authz.Decision{}) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -223,10 +241,39 @@ func (m *Module) permitted(w http.ResponseWriter, r *http.Request, capability au
 			"identity", identity,
 			"capability", string(capability),
 			"decision", decision)
+
+		if !m.recorded(w, r, "secret."+string(capability), identity, tenant, path, 0, audit.ResultDeny, decision) {
+			return "", "", false
+		}
 		httpx.Problem(w, http.StatusForbidden, "forbidden")
 		return "", "", false
 	}
 	return tenant, path, true
+}
+
+func (m *Module) recorded(w http.ResponseWriter, r *http.Request, operation string, identity authn.Identity, tenant, path string, version int, result string, decision authz.Decision) bool {
+	err := m.audit.Append(r.Context(), audit.Event{
+		Operation: operation,
+		Identity:  identity.ID,
+		Tenant:    tenant,
+		Path:      PolicyPath(tenant, path),
+		Version:   version,
+		Result:    result,
+		Policy:    decision.Policy,
+		Rule:      decision.Rule,
+		RequestID: httpx.RequestIDFrom(r.Context()),
+		SourceIP:  httpx.RemoteIP(r),
+	})
+	if err == nil {
+		return true
+	}
+
+	m.logger.Error("the audit sink refused a record; the request is refused with it",
+		"request_id", httpx.RequestIDFrom(r.Context()),
+		"operation", operation,
+		"error", err)
+	httpx.Problem(w, http.StatusServiceUnavailable, "audit_unavailable")
+	return false
 }
 
 func (m *Module) fail(w http.ResponseWriter, r *http.Request, err error) {

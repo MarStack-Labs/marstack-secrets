@@ -32,4 +32,11 @@ var migrations = []sqlite.Migration{
 			CREATE INDEX auth_tokens_by_expiry ON auth_tokens (expires_at);
 		`,
 	},
+	{
+		Name: "0002_single_use_tokens",
+		SQL: `
+			ALTER TABLE auth_tokens ADD COLUMN single_use INTEGER NOT NULL DEFAULT 0;
+			ALTER TABLE auth_tokens ADD COLUMN consumed_at TEXT;
+		`,
+	},
 }

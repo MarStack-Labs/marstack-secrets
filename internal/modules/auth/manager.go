@@ -55,11 +55,15 @@ func (m *Manager) RegisterIdentity(ctx context.Context, id string, kind Kind, te
 }
 
 func (m *Manager) Identity(ctx context.Context, id string) (Identity, error) {
+	return m.identityOn(ctx, m.db, id)
+}
+
+func (m *Manager) identityOn(ctx context.Context, on querier, id string) (Identity, error) {
 	identity := Identity{ID: id}
 	var kind, createdAt string
 	var disabledAt sql.NullString
 
-	err := m.db.QueryRowContext(ctx,
+	err := on.QueryRowContext(ctx,
 		`SELECT kind, tenant, created_at, disabled_at FROM auth_identities WHERE id = ?`, id,
 	).Scan(&kind, &identity.Tenant, &createdAt, &disabledAt)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -93,11 +97,15 @@ func (m *Manager) DisableIdentity(ctx context.Context, id string) error {
 }
 
 func (m *Manager) Issue(ctx context.Context, identityID, binding string, ttl time.Duration) (Token, error) {
+	return m.issue(ctx, m.db, identityID, binding, ttl, reusable)
+}
+
+func (m *Manager) issue(ctx context.Context, on executor, identityID, binding string, ttl time.Duration, single int) (Token, error) {
 	if ttl <= 0 || ttl > MaximumTTL {
 		return Token{}, ErrInvalidTTL
 	}
 
-	identity, err := m.Identity(ctx, identityID)
+	identity, err := m.identityOn(ctx, on, identityID)
 	if err != nil {
 		return Token{}, err
 	}
@@ -113,11 +121,11 @@ func (m *Manager) Issue(ctx context.Context, identityID, binding string, ttl tim
 	issuedAt := m.now().UTC()
 	expiresAt := issuedAt.Add(ttl)
 
-	if _, err := m.db.ExecContext(ctx,
-		`INSERT INTO auth_tokens (id_hash, identity_id, binding, issued_at, expires_at)
-		 VALUES (?, ?, ?, ?, ?)`,
+	if _, err := on.ExecContext(ctx,
+		`INSERT INTO auth_tokens (id_hash, identity_id, binding, issued_at, expires_at, single_use)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
 		fingerprint(value), identityID, binding,
-		sqlite.FormatTime(issuedAt), sqlite.FormatTime(expiresAt),
+		sqlite.FormatTime(issuedAt), sqlite.FormatTime(expiresAt), single,
 	); err != nil {
 		value.Zero()
 		return Token{}, err
@@ -132,17 +140,18 @@ func (m *Manager) Authenticate(ctx context.Context, presented crypto.Sensitive, 
 	}
 
 	var identityID, storedBinding, expiresAt string
+	var single int
 	var revokedAt, disabledAt sql.NullString
 	var kind, tenant, createdAt string
 
 	err := m.db.QueryRowContext(ctx,
-		`SELECT t.identity_id, t.binding, t.expires_at, t.revoked_at,
+		`SELECT t.identity_id, t.binding, t.expires_at, t.revoked_at, t.single_use,
 		        i.kind, i.tenant, i.created_at, i.disabled_at
 		 FROM auth_tokens t
 		 JOIN auth_identities i ON i.id = t.identity_id
 		 WHERE t.id_hash = ?`,
 		fingerprint(presented),
-	).Scan(&identityID, &storedBinding, &expiresAt, &revokedAt,
+	).Scan(&identityID, &storedBinding, &expiresAt, &revokedAt, &single,
 		&kind, &tenant, &createdAt, &disabledAt)
 
 	if errors.Is(err, sql.ErrNoRows) {
@@ -162,6 +171,8 @@ func (m *Manager) Authenticate(ctx context.Context, presented crypto.Sensitive, 
 	}
 
 	switch {
+	case single == singleUse:
+		return Identity{}, ErrUnauthenticated
 	case revokedAt.Valid:
 		return Identity{}, ErrUnauthenticated
 	case disabledAt.Valid:

@@ -1,8 +1,10 @@
 package auth
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"strings"
 	"time"
@@ -42,4 +44,18 @@ func fingerprint(presented crypto.Sensitive) []byte {
 
 func looksLikeToken(presented crypto.Sensitive) bool {
 	return len(presented) >= minTokenLength && strings.HasPrefix(string(presented), tokenPrefix)
+}
+
+const (
+	reusable  = 0
+	singleUse = 1
+)
+
+type querier interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+type executor interface {
+	querier
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }

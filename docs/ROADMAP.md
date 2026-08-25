@@ -137,7 +137,7 @@ guard over.
 Undelete and destroy remain reachable only from Go and the operator CLI. Nothing needs them over HTTP
 yet, and the capability set they would use is already in the engine.
 
-## M5 — Leases (in progress)
+## M5 — Leases (done)
 
 What a lease is here, stated plainly: a lease on a static secret cannot claw the value back. The
 client already holds the plaintext, and no amount of bookkeeping changes that. Pretending otherwise
@@ -157,8 +157,22 @@ creating a row per request, which a schema level partial unique index enforces r
 the code. Reissuing extends an expiry and never shortens it. Sweeping is batched and keeps a
 retention window, so recent history survives while the table stays bounded.
 
-Still to come in M5: issuing a lease on every secret read, the lease endpoints, the sweeper loop with
-jitter, and the control plane webhook that revokes by identity when an instance is destroyed.
+Reads issue a lease, and a lease that cannot be recorded fails the read. Serving a secret without
+recording who received it would be an unrecorded read, which is the thing the record exists to
+prevent.
+
+Renew and revoke act on the caller's own leases only; another identity's lease answers 404 rather
+than 403, since the caller has no business knowing it exists. Prefix revocation needs the `delete`
+capability on the prefix: an identity that may delete secrets under a path may also revoke the
+holdings under it. Everything else stays with the operator CLI, because there is no administrator
+role yet and exposing a store-wide revocation to any authenticated caller would be worse than
+inconvenient.
+
+The sweeper runs with jitter around the configured interval, so a fleet of instances does not
+converge on the same instant.
+
+Not built: the control plane webhook that revokes by identity when an instance is destroyed. It needs
+marstack-cloud to emit the event, and `RevokeIdentity` is already there to receive it.
 
 ## M6 — Parameter store
 

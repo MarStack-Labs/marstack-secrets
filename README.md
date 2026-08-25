@@ -32,6 +32,10 @@ store, and audit logging.
 | `DELETE /v1/secret/data/{tenant}/{path...}` | Reversibly deletes the current version |
 | `GET /v1/secret/metadata/{tenant}/{path...}` | Version and lifecycle information |
 | `POST /v1/sys/policies/check` | Explains what the caller may do and why |
+| `GET /v1/sys/leases` | The caller's own active leases |
+| `PUT /v1/sys/leases/renew` | Extends one of the caller's leases |
+| `PUT /v1/sys/leases/revoke` | Drops one of the caller's leases |
+| `PUT /v1/sys/leases/revoke-prefix` | Revokes every holding under a prefix, and the holders' tokens |
 
 Every other path answers `503 sealed` until the store is unsealed. A path that no module registered
 answers `404 not_found` whether or not it exists, so the route table stays private.

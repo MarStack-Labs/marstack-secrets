@@ -73,15 +73,20 @@ func TestHandlerServesRegisteredModules(t *testing.T) {
 	}
 }
 
-func TestModuleNames(t *testing.T) {
+func TestEveryModuleIsRegistered(t *testing.T) {
 	names := testApp(t).ModuleNames()
-	want := []string{"health", "seal", "auth", "policy", "secret"}
-	if len(names) != len(want) {
-		t.Fatalf("ModuleNames() = %v, want %v", names, want)
+
+	registered := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		if _, repeated := registered[name]; repeated {
+			t.Errorf("module %q is registered twice", name)
+		}
+		registered[name] = struct{}{}
 	}
-	for index := range want {
-		if names[index] != want[index] {
-			t.Fatalf("ModuleNames() = %v, want %v", names, want)
+
+	for _, want := range []string{"health", "seal", "auth", "policy", "lease", "secret"} {
+		if _, present := registered[want]; !present {
+			t.Errorf("module %q is not registered: %v", want, names)
 		}
 	}
 }

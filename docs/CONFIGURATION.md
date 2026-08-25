@@ -22,6 +22,9 @@ rather than one at a time.
 | `MARSEC_LOGIN_BURST` | `5` | Login attempts allowed back to back |
 | `MARSEC_REQUEST_RATE_PER_MINUTE` | `600` | Authenticated requests allowed per identity |
 | `MARSEC_REQUEST_BURST` | `60` | Authenticated requests allowed back to back |
+| `MARSEC_LEASE_TTL` | `30m` | How long a lease issued by a read stays valid |
+| `MARSEC_SWEEP_INTERVAL` | `5m` | Roughly how often expired leases are swept, with jitter |
+| `MARSEC_SWEEP_BATCH` | `500` | Rows removed per sweep, so one pass cannot stall writes |
 
 ## Validation rules
 

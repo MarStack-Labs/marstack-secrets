@@ -34,6 +34,10 @@ type Config struct {
 	LoginBurst           int
 	RequestRatePerMinute float64
 	RequestBurst         int
+
+	LeaseTTL      time.Duration
+	SweepInterval time.Duration
+	SweepBatch    int
 }
 
 func (c Config) InstanceLoginConfigured() bool {
@@ -52,6 +56,9 @@ func Default() Config {
 		LoginBurst:           5,
 		RequestRatePerMinute: 600,
 		RequestBurst:         60,
+		LeaseTTL:             30 * time.Minute,
+		SweepInterval:        5 * time.Minute,
+		SweepBatch:           500,
 	}
 }
 
@@ -104,6 +111,15 @@ func Load(getenv Getenv) (Config, error) {
 	if cfg.RequestBurst, err = intVar(getenv, "REQUEST_BURST", cfg.RequestBurst); err != nil {
 		return Config{}, err
 	}
+	if cfg.LeaseTTL, err = durationVar(getenv, "LEASE_TTL", cfg.LeaseTTL); err != nil {
+		return Config{}, err
+	}
+	if cfg.SweepInterval, err = durationVar(getenv, "SWEEP_INTERVAL", cfg.SweepInterval); err != nil {
+		return Config{}, err
+	}
+	if cfg.SweepBatch, err = intVar(getenv, "SWEEP_BATCH", cfg.SweepBatch); err != nil {
+		return Config{}, err
+	}
 
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
@@ -147,6 +163,15 @@ func (c Config) Validate() error {
 	}
 	if c.LoginBurst < 1 || c.RequestBurst < 1 {
 		problems = append(problems, errors.New("rate limit bursts must be at least one"))
+	}
+	if c.LeaseTTL <= 0 {
+		problems = append(problems, errors.New("lease time to live must be greater than zero"))
+	}
+	if c.SweepInterval <= 0 {
+		problems = append(problems, errors.New("sweep interval must be greater than zero"))
+	}
+	if c.SweepBatch < 1 {
+		problems = append(problems, errors.New("sweep batch must be at least one"))
 	}
 
 	switch {

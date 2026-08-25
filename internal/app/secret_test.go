@@ -382,3 +382,117 @@ func TestSecretEndpointsAreRefusedWhileSealed(t *testing.T) {
 		}
 	}
 }
+
+func TestAReadIssuesALease(t *testing.T) {
+	h := newHarness(t)
+	token := h.session(t, "service/ci", "prod", writerPolicy(t))
+
+	if recorder := h.do(t, http.MethodPut, "/v1/secret/data/prod/db", `{"value":"v"}`, token); recorder.Code != http.StatusOK {
+		t.Fatalf("seeding returned %d", recorder.Code)
+	}
+
+	read := h.do(t, http.MethodGet, "/v1/secret/data/prod/db", "", token)
+	if read.Code != http.StatusOK {
+		t.Fatalf("read returned %d: %s", read.Code, read.Body.String())
+	}
+
+	var value struct {
+		LeaseID  string `json:"lease_id"`
+		LeaseTTL int    `json:"lease_ttl"`
+	}
+	if err := json.Unmarshal(read.Body.Bytes(), &value); err != nil {
+		t.Fatalf("decoding: %v", err)
+	}
+	if !strings.HasPrefix(value.LeaseID, "secret/prod/db/") {
+		t.Errorf("lease_id = %q", value.LeaseID)
+	}
+	if value.LeaseTTL <= 0 {
+		t.Errorf("lease_ttl = %d", value.LeaseTTL)
+	}
+
+	listed := h.do(t, http.MethodGet, "/v1/sys/leases", "", token)
+	if listed.Code != http.StatusOK {
+		t.Fatalf("listing leases returned %d", listed.Code)
+	}
+	if !strings.Contains(listed.Body.String(), value.LeaseID) {
+		t.Errorf("the lease list does not carry the lease: %s", listed.Body.String())
+	}
+}
+
+func TestALeaseCanBeRenewedAndRevokedByItsHolder(t *testing.T) {
+	h := newHarness(t)
+	mine := h.session(t, "service/ci", "prod", writerPolicy(t))
+	theirs := h.session(t, "service/app", "prod", readerPolicy(t))
+
+	h.do(t, http.MethodPut, "/v1/secret/data/prod/db", `{"value":"v"}`, mine)
+	read := h.do(t, http.MethodGet, "/v1/secret/data/prod/db", "", mine)
+
+	var value struct {
+		LeaseID string `json:"lease_id"`
+	}
+	if err := json.Unmarshal(read.Body.Bytes(), &value); err != nil {
+		t.Fatalf("decoding: %v", err)
+	}
+
+	body := `{"lease_id":"` + value.LeaseID + `"}`
+
+	if recorder := h.do(t, http.MethodPut, "/v1/sys/leases/renew", body, theirs); recorder.Code != http.StatusNotFound {
+		t.Errorf("another identity renewed the lease: %d", recorder.Code)
+	}
+	if recorder := h.do(t, http.MethodPut, "/v1/sys/leases/revoke", body, theirs); recorder.Code != http.StatusNotFound {
+		t.Errorf("another identity revoked the lease: %d", recorder.Code)
+	}
+
+	if recorder := h.do(t, http.MethodPut, "/v1/sys/leases/renew", body, mine); recorder.Code != http.StatusOK {
+		t.Fatalf("the holder could not renew: %d %s", recorder.Code, recorder.Body.String())
+	}
+	if recorder := h.do(t, http.MethodPut, "/v1/sys/leases/revoke", body, mine); recorder.Code != http.StatusNoContent {
+		t.Fatalf("the holder could not revoke: %d", recorder.Code)
+	}
+	if recorder := h.do(t, http.MethodPut, "/v1/sys/leases/renew", body, mine); recorder.Code != http.StatusNotFound {
+		t.Errorf("a revoked lease was renewed: %d", recorder.Code)
+	}
+}
+
+func TestPrefixRevocationNeedsDeleteOnThePrefix(t *testing.T) {
+	h := newHarness(t)
+	writer := h.session(t, "service/ci", "prod", writerPolicy(t))
+	reader := h.session(t, "service/app", "prod", readerPolicy(t))
+
+	h.do(t, http.MethodPut, "/v1/secret/data/prod/payment/db", `{"value":"v"}`, writer)
+	h.do(t, http.MethodGet, "/v1/secret/data/prod/payment/db", "", writer)
+	h.do(t, http.MethodGet, "/v1/secret/data/prod/payment/db", "", reader)
+
+	body := `{"prefix":"secret/prod/payment/"}`
+
+	if recorder := h.do(t, http.MethodPut, "/v1/sys/leases/revoke-prefix", body, reader); recorder.Code != http.StatusForbidden {
+		t.Fatalf("a read-only identity revoked a prefix: %d %s", recorder.Code, recorder.Body.String())
+	}
+
+	revoked := h.do(t, http.MethodPut, "/v1/sys/leases/revoke-prefix", body, writer)
+	if revoked.Code != http.StatusOK {
+		t.Fatalf("revoke-prefix returned %d: %s", revoked.Code, revoked.Body.String())
+	}
+
+	var revocation struct {
+		Leases     int      `json:"leases"`
+		Identities []string `json:"identities"`
+		Tokens     int      `json:"tokens"`
+	}
+	if err := json.Unmarshal(revoked.Body.Bytes(), &revocation); err != nil {
+		t.Fatalf("decoding: %v", err)
+	}
+	if revocation.Leases != 2 || len(revocation.Identities) != 2 {
+		t.Errorf("revocation = %+v, want both holders", revocation)
+	}
+	if revocation.Tokens < 2 {
+		t.Errorf("Tokens = %d, want the holders' tokens revoked", revocation.Tokens)
+	}
+
+	if recorder := h.do(t, http.MethodGet, "/v1/secret/data/prod/payment/db", "", reader); recorder.Code != http.StatusUnauthorized {
+		t.Errorf("a holder kept working after prefix revocation: %d", recorder.Code)
+	}
+	if recorder := h.do(t, http.MethodGet, "/v1/secret/data/prod/payment/db", "", writer); recorder.Code != http.StatusUnauthorized {
+		t.Errorf("the caller kept working after revoking its own prefix: %d", recorder.Code)
+	}
+}

@@ -5,12 +5,15 @@ import (
 	"database/sql"
 	"errors"
 	"log/slog"
+	"math/rand/v2"
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/marstack-labs/marstack-secrets/internal/modules/auth"
 	"github.com/marstack-labs/marstack-secrets/internal/modules/health"
+	"github.com/marstack-labs/marstack-secrets/internal/modules/lease"
 	"github.com/marstack-labs/marstack-secrets/internal/modules/policy"
 	"github.com/marstack-labs/marstack-secrets/internal/modules/seal"
 	"github.com/marstack-labs/marstack-secrets/internal/modules/secret"
@@ -37,7 +40,20 @@ type App struct {
 	logger  *slog.Logger
 	db      *sql.DB
 	seal    *seal.Manager
+	leases  *lease.Manager
 	modules []Module
+}
+
+type leaseIssuer struct {
+	manager *lease.Manager
+}
+
+func (l leaseIssuer) Issue(ctx context.Context, tenant, identityID, path string, version int, ttl time.Duration) (string, time.Time, error) {
+	held, err := l.manager.Issue(ctx, tenant, identityID, path, version, ttl)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	return held.ID, held.ExpiresAt, nil
 }
 
 func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*App, error) {
@@ -103,6 +119,14 @@ func assemble(ctx context.Context, cfg config.Config, logger *slog.Logger, db *s
 		return nil, err
 	}
 
+	leaseManager, err := lease.NewManager(db, authManager, lease.Options{})
+	if err != nil {
+		return nil, err
+	}
+	if err := leaseManager.Migrate(ctx); err != nil {
+		return nil, err
+	}
+
 	authModule := auth.NewModule(authManager, logger, assertions, limits)
 	guard := authModule.Require
 
@@ -111,12 +135,24 @@ func assemble(ctx context.Context, cfg config.Config, logger *slog.Logger, db *s
 		logger: logger,
 		db:     db,
 		seal:   sealManager,
+		leases: leaseManager,
 		modules: []Module{
 			health.New(),
 			seal.NewModule(sealManager, logger),
 			authModule,
 			policy.NewModule(policyManager, guard, logger),
-			secret.NewModule(secretService, policyManager, guard, logger),
+			lease.NewModule(leaseManager, lease.ModuleOptions{
+				Authorizer: policyManager,
+				Guard:      guard,
+				Logger:     logger,
+			}),
+			secret.NewModule(secretService, secret.ModuleOptions{
+				Authorizer: policyManager,
+				Leases:     leaseIssuer{manager: leaseManager},
+				LeaseTTL:   cfg.LeaseTTL,
+				Guard:      guard,
+				Logger:     logger,
+			}),
 		},
 	}, nil
 }
@@ -164,6 +200,10 @@ func (a *App) Run(ctx context.Context) error {
 	}
 	a.logger.Info("server starting sealed", "modules", a.ModuleNames())
 
+	sweeping, stopSweeping := context.WithCancel(ctx)
+	defer stopSweeping()
+	go a.sweep(sweeping)
+
 	return httpx.Serve(ctx, httpx.ServerConfig{
 		Addr:              a.cfg.ListenAddr,
 		TLSCertFile:       a.cfg.TLSCertFile,
@@ -171,6 +211,28 @@ func (a *App) Run(ctx context.Context) error {
 		AllowInsecureHTTP: a.cfg.AllowInsecureHTTP,
 		ShutdownTimeout:   a.cfg.ShutdownTimeout,
 	}, a.Handler(), a.logger)
+}
+
+func (a *App) sweep(ctx context.Context) {
+	for {
+		wait := a.cfg.SweepInterval/2 + time.Duration(rand.Int64N(int64(a.cfg.SweepInterval)))
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(wait):
+		}
+
+		removed, err := a.leases.Sweep(ctx, a.cfg.SweepBatch)
+		switch {
+		case errors.Is(err, context.Canceled):
+			return
+		case err != nil:
+			a.logger.Error("sweeping expired leases", "error", err)
+		case removed > 0:
+			a.logger.Info("swept expired leases", "removed", removed)
+		}
+	}
 }
 
 func rateLimits(cfg config.Config) (auth.Limits, error) {

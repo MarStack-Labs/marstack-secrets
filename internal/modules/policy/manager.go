@@ -234,6 +234,14 @@ func (m *Manager) Authorize(ctx context.Context, identity authn.Identity, tenant
 	return set.Evaluate(path, capability), nil
 }
 
+func (m *Manager) Permitted(ctx context.Context, identity authn.Identity, tenant, path string) (bool, error) {
+	decision, err := m.Authorize(ctx, identity, tenant, path, authz.Delete)
+	if err != nil {
+		return false, err
+	}
+	return decision.Allowed, nil
+}
+
 func decodePolicy(name, encoded string) (Policy, error) {
 	var rules []Rule
 	if err := json.Unmarshal([]byte(encoded), &rules); err != nil {

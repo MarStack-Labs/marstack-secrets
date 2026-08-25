@@ -24,11 +24,25 @@ type Authorizer interface {
 	Authorize(ctx context.Context, identity authn.Identity, tenant, path string, capability authz.Capability) (authz.Decision, error)
 }
 
+type Leases interface {
+	Issue(ctx context.Context, tenant, identityID, path string, version int, ttl time.Duration) (string, time.Time, error)
+}
+
 type Module struct {
 	service    *Service
 	authorizer Authorizer
+	leases     Leases
+	leaseTTL   time.Duration
 	guard      httpx.Middleware
 	logger     *slog.Logger
+}
+
+type ModuleOptions struct {
+	Authorizer Authorizer
+	Leases     Leases
+	LeaseTTL   time.Duration
+	Guard      httpx.Middleware
+	Logger     *slog.Logger
 }
 
 type writeRequest struct {
@@ -44,6 +58,8 @@ type readResponse struct {
 	Value     string `json:"value"`
 	Version   int    `json:"version"`
 	CreatedAt string `json:"created_at"`
+	LeaseID   string `json:"lease_id"`
+	LeaseTTL  int    `json:"lease_ttl"`
 }
 
 type metadataResponse struct {
@@ -53,8 +69,15 @@ type metadataResponse struct {
 	UpdatedAt      string `json:"updated_at"`
 }
 
-func NewModule(service *Service, authorizer Authorizer, guard httpx.Middleware, logger *slog.Logger) *Module {
-	return &Module{service: service, authorizer: authorizer, guard: guard, logger: logger}
+func NewModule(service *Service, opts ModuleOptions) *Module {
+	return &Module{
+		service:    service,
+		authorizer: opts.Authorizer,
+		leases:     opts.Leases,
+		leaseTTL:   opts.LeaseTTL,
+		guard:      opts.Guard,
+		logger:     opts.Logger,
+	}
 }
 
 func (m *Module) Name() string {
@@ -87,10 +110,24 @@ func (m *Module) handleRead(w http.ResponseWriter, r *http.Request) {
 	}
 	defer value.Data.Zero()
 
+	identity, _ := authn.IdentityFrom(r.Context())
+	leaseID, expiresAt, err := m.leases.Issue(r.Context(), tenant, identity.ID,
+		PolicyPath(tenant, path), value.Version, m.leaseTTL)
+	if err != nil {
+		m.logger.Error("recording a lease",
+			"request_id", httpx.RequestIDFrom(r.Context()),
+			"identity", identity,
+			"error", err)
+		httpx.Problem(w, http.StatusInternalServerError, "internal_error")
+		return
+	}
+
 	httpx.JSON(w, http.StatusOK, readResponse{
 		Value:     string(value.Data),
 		Version:   value.Version,
 		CreatedAt: value.CreatedAt.UTC().Format(time.RFC3339),
+		LeaseID:   leaseID,
+		LeaseTTL:  int(time.Until(expiresAt).Seconds()),
 	})
 }
 

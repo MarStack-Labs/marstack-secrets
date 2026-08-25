@@ -1,0 +1,12 @@
+bin/
+.data/
+coverage.out
+
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.snap
+.env
+.env.*

@@ -1,0 +1,8 @@
+* text=auto eol=lf
+
+*.png binary
+*.pem binary
+*.snap binary
+
+LICENSE linguist-generated=true
+go.sum linguist-generated=true

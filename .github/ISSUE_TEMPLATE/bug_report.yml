@@ -1,0 +1,48 @@
+name: Bug report
+description: Something behaves differently from what the documents say
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Not for security problems. Use private reporting instead; the link is on the previous screen.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `marsec version`
+      placeholder: v1.0.0
+    validations:
+      required: true
+  - type: dropdown
+    id: state
+    attributes:
+      label: Store state at the time
+      options:
+        - uninitialized
+        - sealed
+        - unsealed
+        - not relevant
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Smallest sequence that shows it
+      description: Commands or requests, with secret values replaced.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead, and which document says so
+      description: A link to the line in README, docs/ or an ADR helps a lot. If no document covers it, say that; the gap may be the bug.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log lines
+      description: From the server log or the audit log. Redact values.
+      render: shell

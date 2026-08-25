@@ -224,7 +224,7 @@ failing sink seals the store, which is the auto-seal deferred from M2.
 Refusals are recorded too, with the policy and rule that decided. "Who tried and was turned away" is
 the other half of an incident.
 
-What the chain does not do is written down in `docs/SECURITY.md` and pinned by a test: anyone who can
+What the chain does not do is written down in `docs/THREAT-MODEL.md` and pinned by a test: anyone who can
 rewrite the whole file can recompute every hash and pass verification. Closing that needs an anchor
 off the host, which is not built.
 

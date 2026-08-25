@@ -1,4 +1,7 @@
-# Security
+# Threat model and controls
+
+Where every control lives, what it is for, and what it does not do. For reporting a vulnerability, see
+[SECURITY.md](../SECURITY.md) instead.
 
 A secret store has no useful "add security later" phase. The controls below are part of the build
 from the first commit, and each one is either enforced by a test or by a CI gate.
@@ -134,5 +137,4 @@ directly, which is how the first credential comes into existence at all.
 
 ## Reporting
 
-This is a personal project under active development. Open an issue for anything found; there is no
-private disclosure process yet.
+Privately, through GitHub's vulnerability reporting. See [SECURITY.md](../SECURITY.md).

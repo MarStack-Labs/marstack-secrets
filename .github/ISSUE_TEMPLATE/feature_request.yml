@@ -1,0 +1,29 @@
+name: Change proposal
+description: Something the store should do that it does not
+labels: [proposal]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This project builds what the current milestone needs and writes down what it deliberately
+        skipped. A proposal is most useful when it argues that a deferred item should stop being
+        deferred.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem, without the solution
+      description: What are you unable to do today, and what did you try instead?
+    validations:
+      required: true
+  - type: textarea
+    id: existing
+    attributes:
+      label: Is it already on the deferred list?
+      description: The end of docs/ROADMAP.md lists what v1 does not have. If this is one of them, say why now is the time.
+    validations:
+      required: true
+  - type: textarea
+    id: cost
+    attributes:
+      label: What it would cost
+      description: A new dependency, a new endpoint, a schema change, a new trust assumption. Naming the cost makes the proposal easier to accept.

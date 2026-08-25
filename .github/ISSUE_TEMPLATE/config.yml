@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a vulnerability
+    url: https://github.com/MarStack-Labs/marstack-secrets/security/advisories/new
+    about: Never report a security problem in a public issue. This store holds secrets, so a public report is a disclosure.
+  - name: What v1 deliberately does not do
+    url: https://github.com/MarStack-Labs/marstack-secrets/blob/main/docs/ROADMAP.md
+    about: Key rotation, token binding enforcement and several others are absent on purpose. Check here before filing.

@@ -46,4 +46,4 @@ Negative:
 ## Related
 
 The full transport and hardening requirements, including `mlock`, disabled core dumps, and disabled
-swap, are in the specification and in `docs/SECURITY.md`.
+swap, are in the specification and in `docs/THREAT-MODEL.md`.

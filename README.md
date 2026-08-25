@@ -213,7 +213,7 @@ error: audit: the chain does not verify: expected record 4 but found 5
 |---|---|
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Modular monolith layout and the six rules that keep it modular |
 | [docs/ENGINEERING-PRINCIPLES.md](docs/ENGINEERING-PRINCIPLES.md) | How KISS, DRY, YAGNI, SoC and SOLID are applied here |
-| [docs/SECURITY.md](docs/SECURITY.md) | Every control, where it is enforced, and what the audit chain cannot do |
+| [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md) | Every control, where it is enforced, and what the audit chain cannot do |
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Every `MARSEC_*` variable, server and client |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | `systemd` unit, host hardening, and how to verify a running instance |
 | [docs/AGENT.md](docs/AGENT.md) | The agent, and why it keeps no cache of its own |
@@ -251,3 +251,26 @@ usage at zero, so the pre-commit hook is where these gates actually run. Everyth
 
 One direct dependency: `modernc.org/sqlite`, chosen over `mattn/go-sqlite3` because it needs no cgo.
 See [ADR 0004](docs/adr/0004-sqlite-as-the-storage-backend.md).
+
+## Reporting a vulnerability
+
+Not in a public issue. This store holds secrets, so a public report is a disclosure. Use
+[private reporting](https://github.com/MarStack-Labs/marstack-secrets/security/advisories/new); the
+details and the scope are in [SECURITY.md](SECURITY.md).
+
+## Contributing
+
+[CONTRIBUTING.md](CONTRIBUTING.md) covers the gates and the house rules. Three of them are unusual
+enough to state here: no comments in any file, no module imports another module, and new security
+behaviour arrives with a test you have watched fail.
+
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) applies. [CHANGELOG.md](CHANGELOG.md) records what each
+release does, and what it deliberately does not.
+
+## Licence
+
+[Apache License 2.0](LICENSE). Chosen over a copyleft licence so this can be used inside a company
+without a legal conversation, and over MIT for the explicit patent grant.
+
+Source files carry no licence header, because this repository allows no comments in code at all. The
+`LICENSE` file is the notice, which is what Apache-2.0 requires.

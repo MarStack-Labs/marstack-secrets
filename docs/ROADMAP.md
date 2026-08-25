@@ -43,9 +43,18 @@ GF(256) using loop based multiplication rather than lookup tables, so no memory 
 secret data. Every subset of the threshold size reconstructs the secret and no smaller subset does,
 which is asserted across all ten three-of-five combinations rather than a single sampled one.
 
-The process boots sealed and serves only `sys/health`, `sys/seal-status`, and `sys/unseal`. Root key
-split with Shamir 3-of-5, verified against a key check value, held in `mlock`ed memory and zeroed on
-shutdown. Auto-seal when the audit sink fails. `systemd` unit and host hardening.
+The seal manager is done, in `internal/modules/seal`. The root key exists only in memory: a restart
+leaves the store sealed, and the persisted configuration holds nothing but the Shamir parameters and
+a key check value. Key encryption keys are derived per tenant rather than stored, so no key material
+is written anywhere.
+
+`seal.Cipher` is the implementation of the interface `secret` declares. Neither module imports the
+other; the composition root puts them together, which is exactly the arrangement ADR 0001 exists to
+allow.
+
+Still to come in M2: the process boots sealed and serves only `sys/health`, `sys/seal-status`, and
+`sys/unseal`. `mlock`ed memory and zeroing on shutdown. Auto-seal when the audit sink fails.
+`systemd` unit and host hardening.
 
 ## M3 — Authentication
 

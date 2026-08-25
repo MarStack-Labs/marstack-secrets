@@ -13,11 +13,21 @@ from the first commit, and each one is either enforced by a test or by a CI gate
 | Commit | `make test-race` | Data races, and the security assertions listed below |
 | Commit | `gitleaks dir .` | Committed credentials, including in history |
 | Commit | `govulncheck ./...` | Known vulnerabilities in dependencies and the toolchain |
-| Repository | Dependabot on `gomod` and `github-actions` | Dependencies going stale between releases |
 | Repository | Workflow `permissions: contents: read` | An action with more token scope than it needs |
 
-The pre-commit hook and CI run the same `make check` target. A control that only exists in CI is a
-control a developer discovers too late.
+Every gate above is a target in the `Makefile`, and `make check` runs all of them. The workflow in
+`.github/workflows/ci.yml` calls the same targets, so the two can never drift.
+
+GitHub Actions is currently disabled on this repository to keep runner usage at zero, which makes
+`make check` the only place these gates run. Install the pre-commit hook after cloning:
+
+```sh
+make hooks
+```
+
+Without the hook there is no enforcement at all, only intention. Dependency updates are applied by
+hand alongside the milestone that needs them rather than on a schedule, since scheduled pull
+requests cannot be verified while Actions are off.
 
 ## Secure defaults
 

@@ -48,15 +48,15 @@ curl -i http://127.0.0.1:8200/v1/sys/health
 
 | Command | Purpose |
 |---|---|
-| `make check` | Everything CI runs: formatting, vet, architecture boundaries, race tests, security scans |
+| `make check` | Every gate: formatting, vet, architecture boundaries, race tests, security scans |
 | `make test` | Unit tests |
 | `make cover` | Unit tests with a coverage summary |
 | `make arch-check` | Fails if a module imports another module |
 | `make security` | `govulncheck` and `gitleaks` |
 | `make hooks` | Installs a pre-commit hook that runs `make check` |
 
-Run `make hooks` once after cloning so the security and architecture gates run before a commit is
-created rather than after it is pushed.
+Run `make hooks` once after cloning. GitHub Actions is disabled on this repository, so the
+pre-commit hook is where the security and architecture gates actually run.
 
 ## Requirements
 

@@ -49,6 +49,9 @@ requests cannot be verified while Actions are off.
 | Every authentication failure returns one error | The endpoint cannot be used to learn which tokens exist |
 | Bootstrap tokens are single use, consumed inside the issuing transaction | Concurrent exchanges cannot both succeed |
 | Auth endpoints are refused while sealed | A session for a store that decrypts nothing is not worth issuing |
+| Login attempts are limited per source address, taken from the connection | A client cannot pick its own rate limit bucket by setting a header |
+| Authenticated requests are limited per identity, after authentication | Unauthenticated traffic cannot exhaust a real identity's budget |
+| The rate limiter tracks a bounded number of keys | An attacker cannot grow the table into a memory exhaustion |
 
 ## Data at rest
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"log/slog"
+	"net"
 	"net/http"
 	"time"
 )
@@ -105,4 +106,29 @@ func (rec *statusRecorder) Write(b []byte) (int, error) {
 	n, err := rec.ResponseWriter.Write(b)
 	rec.written += n
 	return n, err
+}
+
+type Allower interface {
+	Allow(key string) bool
+}
+
+func RateLimit(limiter Allower, key func(*http.Request) string) Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !limiter.Allow(key(r)) {
+				w.Header().Set("Retry-After", "1")
+				Problem(w, http.StatusTooManyRequests, "rate_limited")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func RemoteIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }

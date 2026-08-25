@@ -16,7 +16,7 @@ import (
 func newTestModule(t *testing.T) (*Module, *Manager, *clock) {
 	t.Helper()
 	manager, tick, _ := newTestManager(t)
-	return NewModule(manager, slog.New(slog.NewJSONHandler(io.Discard, nil)), nil), manager, tick
+	return NewModule(manager, slog.New(slog.NewJSONHandler(io.Discard, nil)), nil, Limits{}), manager, tick
 }
 
 func handlerFor(t *testing.T, module *Module) http.Handler {
@@ -70,7 +70,7 @@ func TestInstanceLoginIsNotRoutedWhenUnconfigured(t *testing.T) {
 
 func TestInstanceLoginOverHTTP(t *testing.T) {
 	manager, tick, control := instanceSetup(t)
-	module := NewModule(manager, slog.New(slog.NewJSONHandler(io.Discard, nil)), control.verifier)
+	module := NewModule(manager, slog.New(slog.NewJSONHandler(io.Discard, nil)), control.verifier, Limits{})
 	handler := handlerFor(t, module)
 
 	assertion := control.assert(t, "instance/web-01", "prod", tick.at)
@@ -292,5 +292,80 @@ func TestNoResponseCarriesTheTokenBack(t *testing.T) {
 	self := get(t, handler, pathSelf, string(session.Value))
 	if bytes.Contains(self.Body.Bytes(), session.Value) {
 		t.Errorf("the self response echoes the token: %s", self.Body.String())
+	}
+}
+
+type countingLimiter struct {
+	allowed int
+	budget  int
+}
+
+func (c *countingLimiter) Allow(string) bool {
+	if c.allowed >= c.budget {
+		return false
+	}
+	c.allowed++
+	return true
+}
+
+func TestLoginAttemptsAreRateLimitedPerSource(t *testing.T) {
+	manager, tick, _ := newTestManager(t)
+	_ = tick
+	limiter := &countingLimiter{budget: 2}
+	module := NewModule(manager, slog.New(slog.NewJSONHandler(io.Discard, nil)), nil, Limits{Logins: limiter})
+	handler := handlerFor(t, module)
+
+	for attempt := 1; attempt <= 2; attempt++ {
+		recorder := post(t, handler, pathBootstrapLogin, loginRequest{Token: "mss_" + strings.Repeat("E", 43)}, "")
+		if recorder.Code != http.StatusUnauthorized {
+			t.Fatalf("attempt %d returned %d, want %d", attempt, recorder.Code, http.StatusUnauthorized)
+		}
+	}
+
+	recorder := post(t, handler, pathBootstrapLogin, loginRequest{Token: "mss_" + strings.Repeat("E", 43)}, "")
+	if recorder.Code != http.StatusTooManyRequests {
+		t.Fatalf("the third attempt returned %d, want %d", recorder.Code, http.StatusTooManyRequests)
+	}
+	if got := recorder.Header().Get("Retry-After"); got == "" {
+		t.Error("a rate limited response carries no Retry-After")
+	}
+	if !strings.Contains(recorder.Body.String(), "rate_limited") {
+		t.Errorf("body = %q", recorder.Body.String())
+	}
+}
+
+func TestAuthenticatedRequestsAreRateLimitedPerIdentity(t *testing.T) {
+	manager, _, _ := newTestManager(t)
+	limiter := &countingLimiter{budget: 1}
+	module := NewModule(manager, slog.New(slog.NewJSONHandler(io.Discard, nil)), nil, Limits{Requests: limiter})
+	handler := handlerFor(t, module)
+
+	registered(t, manager, "instance/web-01", authn.KindInstance)
+	session := issued(t, manager, "instance/web-01", NoBinding)
+
+	if recorder := get(t, handler, pathSelf, string(session.Value)); recorder.Code != http.StatusOK {
+		t.Fatalf("the first request returned %d", recorder.Code)
+	}
+	if recorder := get(t, handler, pathSelf, string(session.Value)); recorder.Code != http.StatusTooManyRequests {
+		t.Fatalf("the second request returned %d, want %d", recorder.Code, http.StatusTooManyRequests)
+	}
+}
+
+func TestAnUnauthenticatedRequestDoesNotSpendTheIdentityBudget(t *testing.T) {
+	manager, _, _ := newTestManager(t)
+	limiter := &countingLimiter{budget: 1}
+	module := NewModule(manager, slog.New(slog.NewJSONHandler(io.Discard, nil)), nil, Limits{Requests: limiter})
+	handler := handlerFor(t, module)
+
+	registered(t, manager, "instance/web-01", authn.KindInstance)
+	session := issued(t, manager, "instance/web-01", NoBinding)
+
+	for range 5 {
+		if recorder := get(t, handler, pathSelf, "mss_"+strings.Repeat("F", 43)); recorder.Code != http.StatusUnauthorized {
+			t.Fatalf("an unknown token returned %d", recorder.Code)
+		}
+	}
+	if recorder := get(t, handler, pathSelf, string(session.Value)); recorder.Code != http.StatusOK {
+		t.Fatalf("the real token was refused with %d: unauthenticated traffic spent its budget", recorder.Code)
 	}
 }

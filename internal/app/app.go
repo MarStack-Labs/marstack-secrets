@@ -15,6 +15,7 @@ import (
 	"github.com/marstack-labs/marstack-secrets/internal/platform/config"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/httpx"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/jwt"
+	"github.com/marstack-labs/marstack-secrets/internal/platform/ratelimit"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/sqlite"
 )
 
@@ -67,6 +68,11 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*App, err
 		logger.Warn("instance logins are disabled; set MARSEC_CONTROL_PLANE_ISSUER and MARSEC_CONTROL_PLANE_JWKS_FILE to accept them")
 	}
 
+	limits, err := rateLimits(cfg)
+	if err != nil {
+		return nil, errors.Join(err, db.Close())
+	}
+
 	return &App{
 		cfg:    cfg,
 		logger: logger,
@@ -75,7 +81,7 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*App, err
 		modules: []Module{
 			health.New(),
 			seal.NewModule(sealManager, logger),
-			auth.NewModule(authManager, logger, assertions),
+			auth.NewModule(authManager, logger, assertions, limits),
 		},
 	}, nil
 }
@@ -130,6 +136,26 @@ func (a *App) Run(ctx context.Context) error {
 		AllowInsecureHTTP: a.cfg.AllowInsecureHTTP,
 		ShutdownTimeout:   a.cfg.ShutdownTimeout,
 	}, a.Handler(), a.logger)
+}
+
+func rateLimits(cfg config.Config) (auth.Limits, error) {
+	logins, err := ratelimit.New(ratelimit.Options{
+		PerMinute: cfg.LoginRatePerMinute,
+		Burst:     cfg.LoginBurst,
+	})
+	if err != nil {
+		return auth.Limits{}, err
+	}
+
+	requests, err := ratelimit.New(ratelimit.Options{
+		PerMinute: cfg.RequestRatePerMinute,
+		Burst:     cfg.RequestBurst,
+	})
+	if err != nil {
+		return auth.Limits{}, err
+	}
+
+	return auth.Limits{Logins: logins, Requests: requests}, nil
 }
 
 func instanceVerifier(cfg config.Config) (auth.Assertions, error) {

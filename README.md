@@ -24,6 +24,7 @@ authentication exists would be an unauthenticated secret endpoint. See
 | `POST /v1/sys/init` | Generates the root key and returns the unseal shares, once |
 | `POST /v1/sys/unseal` | Submits one share; the store opens when a quorum is reached |
 | `POST /v1/auth/bootstrap/login` | Trades a single-use bootstrap token for a session token |
+| `POST /v1/auth/instance/login` | Trades a control plane assertion for a session token, when configured |
 | `GET /v1/auth/self` | The identity behind the presented token |
 | `POST /v1/auth/logout` | Revokes the presented token |
 

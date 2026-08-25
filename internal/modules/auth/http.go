@@ -26,6 +26,13 @@ type Module struct {
 	manager    *Manager
 	logger     *slog.Logger
 	assertions Assertions
+	logins     httpx.Allower
+	requests   httpx.Allower
+}
+
+type Limits struct {
+	Logins   httpx.Allower
+	Requests httpx.Allower
 }
 
 type loginRequest struct {
@@ -47,8 +54,14 @@ type selfResponse struct {
 	Tenant   string `json:"tenant"`
 }
 
-func NewModule(manager *Manager, logger *slog.Logger, assertions Assertions) *Module {
-	return &Module{manager: manager, logger: logger, assertions: assertions}
+func NewModule(manager *Manager, logger *slog.Logger, assertions Assertions, limits Limits) *Module {
+	return &Module{
+		manager:    manager,
+		logger:     logger,
+		assertions: assertions,
+		logins:     limits.Logins,
+		requests:   limits.Requests,
+	}
 }
 
 func (m *Module) Name() string {
@@ -56,12 +69,19 @@ func (m *Module) Name() string {
 }
 
 func (m *Module) Register(mux *http.ServeMux) {
-	mux.HandleFunc("POST "+pathBootstrapLogin, m.handleBootstrapLogin)
+	mux.Handle("POST "+pathBootstrapLogin, m.perSource(http.HandlerFunc(m.handleBootstrapLogin)))
 	if m.assertions != nil {
-		mux.HandleFunc("POST "+pathInstanceLogin, m.handleInstanceLogin)
+		mux.Handle("POST "+pathInstanceLogin, m.perSource(http.HandlerFunc(m.handleInstanceLogin)))
 	}
 	mux.Handle("GET "+pathSelf, m.Require(http.HandlerFunc(m.handleSelf)))
 	mux.Handle("POST "+pathLogout, m.Require(http.HandlerFunc(m.handleLogout)))
+}
+
+func (m *Module) perSource(next http.Handler) http.Handler {
+	if m.logins == nil {
+		return next
+	}
+	return httpx.RateLimit(m.logins, httpx.RemoteIP)(next)
 }
 
 func (m *Module) Require(next http.Handler) http.Handler {
@@ -80,6 +100,12 @@ func (m *Module) Require(next http.Handler) http.Handler {
 					"request_id", httpx.RequestIDFrom(r.Context()), "error", err)
 			}
 			unauthorized(w)
+			return
+		}
+
+		if m.requests != nil && !m.requests.Allow(identity.ID) {
+			w.Header().Set("Retry-After", "1")
+			httpx.Problem(w, http.StatusTooManyRequests, "rate_limited")
 			return
 		}
 

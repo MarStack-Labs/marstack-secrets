@@ -18,6 +18,10 @@ rather than one at a time.
 | `MARSEC_CONTROL_PLANE_JWKS_FILE` | none | Path to the control plane Ed25519 key set. Enables instance login |
 | `MARSEC_CONTROL_PLANE_AUDIENCE` | `marstack-secrets` | Audience this store accepts in assertions |
 | `MARSEC_CONTROL_PLANE_SKEW` | `30s` | Tolerated clock skew, capped at one minute regardless |
+| `MARSEC_LOGIN_RATE_PER_MINUTE` | `10` | Login attempts allowed per source address |
+| `MARSEC_LOGIN_BURST` | `5` | Login attempts allowed back to back |
+| `MARSEC_REQUEST_RATE_PER_MINUTE` | `600` | Authenticated requests allowed per identity |
+| `MARSEC_REQUEST_BURST` | `60` | Authenticated requests allowed back to back |
 
 ## Validation rules
 
@@ -35,6 +39,9 @@ rather than one at a time.
   `POST /v1/auth/instance/login` unrouted, so an unconfigured store answers `404` instead of
   advertising a login it cannot perform.
 - Values are trimmed, and a value that is only whitespace counts as unset.
+- Login attempts are counted per source address, taken from the connection rather than from any
+  forwarded header, so a client cannot choose its own bucket. Behind a proxy every request shares the
+  proxy's address; put the limit in front of the proxy in that case.
 
 ## Production example
 

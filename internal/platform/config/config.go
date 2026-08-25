@@ -29,6 +29,11 @@ type Config struct {
 	ControlPlaneAudience string
 	ControlPlaneJWKSFile string
 	ControlPlaneSkew     time.Duration
+
+	LoginRatePerMinute   float64
+	LoginBurst           int
+	RequestRatePerMinute float64
+	RequestBurst         int
 }
 
 func (c Config) InstanceLoginConfigured() bool {
@@ -43,6 +48,10 @@ func Default() Config {
 		ShutdownTimeout:      15 * time.Second,
 		ControlPlaneAudience: "marstack-secrets",
 		ControlPlaneSkew:     30 * time.Second,
+		LoginRatePerMinute:   10,
+		LoginBurst:           5,
+		RequestRatePerMinute: 600,
+		RequestBurst:         60,
 	}
 }
 
@@ -83,6 +92,19 @@ func Load(getenv Getenv) (Config, error) {
 	}
 	cfg.ControlPlaneSkew = skew
 
+	if cfg.LoginRatePerMinute, err = floatVar(getenv, "LOGIN_RATE_PER_MINUTE", cfg.LoginRatePerMinute); err != nil {
+		return Config{}, err
+	}
+	if cfg.LoginBurst, err = intVar(getenv, "LOGIN_BURST", cfg.LoginBurst); err != nil {
+		return Config{}, err
+	}
+	if cfg.RequestRatePerMinute, err = floatVar(getenv, "REQUEST_RATE_PER_MINUTE", cfg.RequestRatePerMinute); err != nil {
+		return Config{}, err
+	}
+	if cfg.RequestBurst, err = intVar(getenv, "REQUEST_BURST", cfg.RequestBurst); err != nil {
+		return Config{}, err
+	}
+
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
 	}
@@ -120,6 +142,13 @@ func (c Config) Validate() error {
 		}
 	}
 
+	if c.LoginRatePerMinute <= 0 || c.RequestRatePerMinute <= 0 {
+		problems = append(problems, errors.New("rate limits must be greater than zero"))
+	}
+	if c.LoginBurst < 1 || c.RequestBurst < 1 {
+		problems = append(problems, errors.New("rate limit bursts must be at least one"))
+	}
+
 	switch {
 	case c.AllowInsecureHTTP && (c.TLSCertFile != "" || c.TLSKeyFile != ""):
 		problems = append(problems, errors.New("plaintext HTTP and TLS certificates are mutually exclusive"))
@@ -145,6 +174,30 @@ func boolVar(getenv Getenv, name string, fallback bool) (bool, error) {
 	value, err := strconv.ParseBool(raw)
 	if err != nil {
 		return false, fmt.Errorf("%s%s: %q is not a boolean", envPrefix, name, raw)
+	}
+	return value, nil
+}
+
+func floatVar(getenv Getenv, name string, fallback float64) (float64, error) {
+	raw := strings.TrimSpace(getenv(envPrefix + name))
+	if raw == "" {
+		return fallback, nil
+	}
+	value, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		return 0, fmt.Errorf("%s%s: %q is not a number", envPrefix, name, raw)
+	}
+	return value, nil
+}
+
+func intVar(getenv Getenv, name string, fallback int) (int, error) {
+	raw := strings.TrimSpace(getenv(envPrefix + name))
+	if raw == "" {
+		return fallback, nil
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("%s%s: %q is not a whole number", envPrefix, name, raw)
 	}
 	return value, nil
 }

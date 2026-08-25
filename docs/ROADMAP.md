@@ -65,7 +65,7 @@ process made undumpable. Any failure stops the process unless the operator expli
 
 Auto-seal when the audit sink fails belongs with M7, since there is no audit sink to fail yet.
 
-## M3 — Authentication (in progress)
+## M3 — Authentication (done)
 
 Identities and tokens are done, in `internal/modules/auth`. A token is 256 random bits behind a
 `mss_` prefix and only its SHA-256 fingerprint is stored, so the database cannot hand anyone a
@@ -102,8 +102,15 @@ present the same instance name, which is public. Enforcement therefore waits for
 client certificate is the observed value. Until then instance sessions are issued unbound, and a test
 asserts that rather than leaving a control in place that cannot be enforced.
 
-Still to come in M3: rate limiting per identity, and a liveness check against the control plane so a
-destroyed instance cannot spend an assertion that is still inside its expiry window.
+Rate limiting is done, in `internal/platform/ratelimit`. Login attempts are counted per source
+address and authenticated requests per identity, the second only after authentication succeeds so
+unauthenticated traffic cannot exhaust a real identity's budget. The key table is bounded and sweeps
+idle buckets, because a limiter keyed by attacker-chosen values is otherwise a memory exhaustion of
+its own.
+
+Not built, and honest about it: a liveness check against the control plane, so a destroyed instance
+cannot spend an assertion still inside its expiry window. The window is bounded by the assertion's
+own expiry, and the check needs an endpoint the control plane does not expose yet.
 
 No new secret types or engines are added before M3 is finished. If authentication is wrong, the rest
 is decoration.

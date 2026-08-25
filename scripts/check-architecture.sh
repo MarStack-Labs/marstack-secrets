@@ -30,9 +30,14 @@ if [ -n "$client_downwards" ]; then
 	report "the client must not depend on modules or the composition root:" "$client_downwards"
 fi
 
-server_to_client=$(grep -rn "$module_path/internal/client" internal/modules internal/platform internal/app --include='*.go' || true)
+agent_downwards=$(grep -rnE "$module_path/internal/(modules|app)" internal/agent --include='*.go' || true)
+if [ -n "$agent_downwards" ]; then
+	report "the agent must not depend on modules or the composition root:" "$agent_downwards"
+fi
+
+server_to_client=$(grep -rnE "$module_path/internal/(client|agent)" internal/modules internal/platform internal/app --include='*.go' || true)
 if [ -n "$server_to_client" ]; then
-	report "the server must not depend on its own client:" "$server_to_client"
+	report "the server must not depend on its own client or agent:" "$server_to_client"
 fi
 
 if [ "$failed" -ne 0 ]; then

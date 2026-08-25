@@ -171,6 +171,7 @@ first non-flag token.
 | [docs/SECURITY.md](docs/SECURITY.md) | Shift-left security practices and the threat boundary |
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Every `MARSEC_*` environment variable |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | `systemd` unit, host hardening, and how to verify a running instance |
+| [docs/AGENT.md](docs/AGENT.md) | The agent that lets an unmodified application use the store |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Milestones, in order, with the reasoning behind the order |
 | [docs/adr/](docs/adr/) | Architecture decision records |
 

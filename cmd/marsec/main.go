@@ -43,6 +43,8 @@ func run(args []string) error {
 		return runParam(context.Background(), os.Stdout, args[1:])
 	case "status":
 		return runStatus(context.Background(), os.Stdout, args[1:])
+	case "agent":
+		return runAgent(os.Stdout, args[1:])
 	case "version":
 		fmt.Println(version)
 		return nil
@@ -107,6 +109,7 @@ Usage:
   marsec status     report whether the store is sealed
   marsec secret     get, put or delete a secret
   marsec param      get or put a parameter
+  marsec agent      render templates from the store and keep them current
   marsec version    print the binary version
   marsec help       show this message
 

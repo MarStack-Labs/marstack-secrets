@@ -236,7 +236,7 @@ course in ADR 0005.
 Scraping a sealed store is when the numbers matter most, and an authenticated endpoint would be
 unreachable then. No metric carries a tenant, path, or identity label.
 
-## M8 — Client tooling (in progress)
+## M8 — Client tooling (done)
 
 The HTTP client is done, in `internal/client`, and it is a new peer of `app`, `modules` and
 `platform` rather than a package inside any of them. Two architecture rules came with it: the client
@@ -257,8 +257,21 @@ everyone's `ps` output.
 The session token is kept in a `0600` file, `MARSEC_TOKEN` overrides it for a single call, and a
 missing session says to run `marsec login` rather than reporting a bare 401.
 
-Still to come in M8: the agent that logs in, renders templates, renews leases before expiry, and
-serves a last-known-good cache when the store is unreachable.
+The agent is done, in `internal/agent`, documented in `docs/AGENT.md`.
+
+There is no separate cache, and that is the design rather than an omission. Keeping a second copy of
+the secrets on disk to survive an outage would double the exposure to halve an inconvenience. The
+rendered destination file already is that copy, so the agent declines to overwrite it with anything
+worse: a destination is written only after every lookup in its template succeeded, and a failed cycle
+leaves it exactly as it was.
+
+Writes are atomic through a temporary file in the same directory followed by a rename, so an
+application never reads a half written configuration. The reload command runs only when the content
+actually changed, because reloading on every poll is a restart loop with extra steps. It is an
+argument list rather than a shell string, so there is nothing to quote and nothing to inject.
+
+Configuration is JSON rather than YAML: YAML needs a dependency and the file is short. Unknown fields
+are rejected so a typo fails at startup instead of silently doing nothing.
 
 ## M9 — Operations
 

@@ -11,4 +11,5 @@ var (
 	ErrInvalidPath    = errors.New("secret: path is empty or too long")
 	ErrInvalidVersion = errors.New("secret: version must not be negative")
 	ErrMaxVersions    = errors.New("secret: max versions must be greater than zero")
+	ErrNoSealer       = errors.New("secret: a sealer is required to write a version")
 )

@@ -53,9 +53,13 @@ func envelopeFor(marker byte) crypto.Envelope {
 	}
 }
 
+func sealing(envelope crypto.Envelope) Sealer {
+	return func(int) (crypto.Envelope, error) { return envelope, nil }
+}
+
 func put(t *testing.T, store *Store, tenant, path string, marker byte) int {
 	t.Helper()
-	version, err := store.Put(t.Context(), tenant, path, envelopeFor(marker), Any())
+	version, err := store.Put(t.Context(), tenant, path, Any(), sealing(envelopeFor(marker)))
 	if err != nil {
 		t.Fatalf("Put returned error: %v", err)
 	}
@@ -144,17 +148,68 @@ func TestPutHonoursCheckAndSet(t *testing.T) {
 	store, _ := newTestStore(t, Options{})
 	ctx := t.Context()
 
-	if _, err := store.Put(ctx, "prod", "payment-api", envelopeFor(1), Absent()); err != nil {
+	if _, err := store.Put(ctx, "prod", "payment-api", Absent(), sealing(envelopeFor(1))); err != nil {
 		t.Fatalf("Put with Absent on a new path returned error: %v", err)
 	}
-	if _, err := store.Put(ctx, "prod", "payment-api", envelopeFor(2), Absent()); !errors.Is(err, ErrConflict) {
+	if _, err := store.Put(ctx, "prod", "payment-api", Absent(), sealing(envelopeFor(2))); !errors.Is(err, ErrConflict) {
 		t.Errorf("Put with Absent on an existing path = %v, want ErrConflict", err)
 	}
-	if _, err := store.Put(ctx, "prod", "payment-api", envelopeFor(2), AtVersion(1)); err != nil {
+	if _, err := store.Put(ctx, "prod", "payment-api", AtVersion(1), sealing(envelopeFor(2))); err != nil {
 		t.Fatalf("Put with AtVersion(1) returned error: %v", err)
 	}
-	if _, err := store.Put(ctx, "prod", "payment-api", envelopeFor(3), AtVersion(1)); !errors.Is(err, ErrConflict) {
+	if _, err := store.Put(ctx, "prod", "payment-api", AtVersion(1), sealing(envelopeFor(3))); !errors.Is(err, ErrConflict) {
 		t.Errorf("Put with a stale expectation = %v, want ErrConflict", err)
+	}
+}
+
+func TestTheSealerReceivesTheVersionThatIsWritten(t *testing.T) {
+	store, _ := newTestStore(t, Options{})
+	ctx := t.Context()
+
+	for expected := 1; expected <= 3; expected++ {
+		var offered int
+		written, err := store.Put(ctx, "prod", "payment-api", Any(), func(version int) (crypto.Envelope, error) {
+			offered = version
+			return envelopeFor(byte(version)), nil
+		})
+		if err != nil {
+			t.Fatalf("Put returned error: %v", err)
+		}
+		if offered != expected || written != expected {
+			t.Fatalf("sealer saw version %d and the store wrote %d, want %d for both", offered, written, expected)
+		}
+	}
+}
+
+func TestAFailingSealerWritesNothing(t *testing.T) {
+	store, _ := newTestStore(t, Options{})
+	ctx := t.Context()
+	put(t, store, "prod", "payment-api", 1)
+
+	sealFailed := errors.New("the key is unavailable")
+	_, err := store.Put(ctx, "prod", "payment-api", Any(), func(int) (crypto.Envelope, error) {
+		return crypto.Envelope{}, sealFailed
+	})
+	if !errors.Is(err, sealFailed) {
+		t.Fatalf("Put = %v, want the sealer error", err)
+	}
+
+	metadata, err := store.Metadata(ctx, "prod", "payment-api")
+	if err != nil {
+		t.Fatalf("Metadata returned error: %v", err)
+	}
+	if metadata.CurrentVersion != 1 {
+		t.Errorf("current version = %d, want it unchanged at 1", metadata.CurrentVersion)
+	}
+	if _, err := store.Get(ctx, "prod", "payment-api", 2); !errors.Is(err, ErrNotFound) {
+		t.Errorf("version 2 = %v, want ErrNotFound", err)
+	}
+}
+
+func TestPutRequiresASealer(t *testing.T) {
+	store, _ := newTestStore(t, Options{})
+	if _, err := store.Put(t.Context(), "prod", "payment-api", Any(), nil); !errors.Is(err, ErrNoSealer) {
+		t.Fatalf("Put = %v, want ErrNoSealer", err)
 	}
 }
 
@@ -163,7 +218,7 @@ func TestAConflictingPutChangesNothing(t *testing.T) {
 	ctx := t.Context()
 	put(t, store, "prod", "payment-api", 1)
 
-	if _, err := store.Put(ctx, "prod", "payment-api", envelopeFor(9), AtVersion(7)); !errors.Is(err, ErrConflict) {
+	if _, err := store.Put(ctx, "prod", "payment-api", AtVersion(7), sealing(envelopeFor(9))); !errors.Is(err, ErrConflict) {
 		t.Fatalf("Put = %v, want ErrConflict", err)
 	}
 
@@ -268,11 +323,11 @@ func TestDestroyedMaterialDoesNotLingerInTheDatabaseFile(t *testing.T) {
 	}
 
 	marker := bytes.Repeat([]byte{0x5A, 0xA5}, 512)
-	if _, err := store.Put(ctx, "prod", "payment-api", crypto.Envelope{
+	if _, err := store.Put(ctx, "prod", "payment-api", Absent(), sealing(crypto.Envelope{
 		KEKVersion: 1,
 		WrappedDEK: marker,
 		Ciphertext: marker,
-	}, Absent()); err != nil {
+	})); err != nil {
 		t.Fatalf("Put returned error: %v", err)
 	}
 	if err := store.Destroy(ctx, "prod", "payment-api", 1); err != nil {
@@ -407,7 +462,7 @@ func TestStoreRejectsInvalidLocations(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			if _, err := store.Put(ctx, tc.tenant, tc.path, envelopeFor(1), Any()); !errors.Is(err, tc.want) {
+			if _, err := store.Put(ctx, tc.tenant, tc.path, Any(), sealing(envelopeFor(1))); !errors.Is(err, tc.want) {
 				t.Errorf("Put = %v, want %v", err, tc.want)
 			}
 			if _, err := store.Get(ctx, tc.tenant, tc.path, currentVersion); !errors.Is(err, tc.want) {
@@ -454,7 +509,7 @@ func TestStoreCarriesSealedValuesEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Seal returned error: %v", err)
 	}
-	if _, err := store.Put(ctx, "prod", "payment-api", sealed, Absent()); err != nil {
+	if _, err := store.Put(ctx, "prod", "payment-api", Absent(), sealing(sealed)); err != nil {
 		t.Fatalf("Put returned error: %v", err)
 	}
 

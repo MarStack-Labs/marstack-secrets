@@ -17,6 +17,8 @@ const (
 	currentVersion     = 0
 )
 
+type Sealer func(version int) (crypto.Envelope, error)
+
 type Record struct {
 	Tenant      string
 	Path        string
@@ -69,9 +71,12 @@ func (s *Store) Migrate(ctx context.Context) error {
 	return sqlite.Migrate(ctx, s.db, moduleName, migrations)
 }
 
-func (s *Store) Put(ctx context.Context, tenant, path string, envelope crypto.Envelope, expect Expectation) (int, error) {
+func (s *Store) Put(ctx context.Context, tenant, path string, expect Expectation, seal Sealer) (int, error) {
 	if err := validateLocation(tenant, path); err != nil {
 		return 0, err
+	}
+	if seal == nil {
+		return 0, ErrNoSealer
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -90,6 +95,11 @@ func (s *Store) Put(ctx context.Context, tenant, path string, envelope crypto.En
 
 	now := s.timestamp()
 	next := current + 1
+
+	envelope, err := seal(next)
+	if err != nil {
+		return 0, err
+	}
 
 	if known {
 		_, err = tx.ExecContext(ctx,

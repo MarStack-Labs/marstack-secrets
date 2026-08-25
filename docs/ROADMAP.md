@@ -273,10 +273,46 @@ argument list rather than a shell string, so there is nothing to quote and nothi
 Configuration is JSON rather than YAML: YAML needs a dependency and the file is short. Unknown fields
 are rejected so a typo fails at startup instead of silently doing nothing.
 
-## M9 — Operations
+## M9 — Operations (done, with one item deliberately dropped)
 
-Snapshot and restore, a restore drill in CI, response wrapping, and runbooks for break-glass, key
-rotation, and prefix revocation.
+Snapshot and restore are done, in `internal/platform/sqlite`. A snapshot is a `VACUUM INTO`, so it is
+consistent without a long lock, and it is verified after writing rather than assumed good: integrity
+check plus a count of applied migrations. Restore refuses to write over an existing database, because
+the file it would overwrite is the only other copy until the restored one is proven.
+
+A snapshot holds encrypted data and no root key. A leaked snapshot is not leaked secrets, and it is
+equally useless to whoever holds it without a quorum of shares.
+
+`make drill` is the restore drill, and it runs as part of `make check`. It provisions a scratch store,
+snapshots it, verifies, restores into a second directory, compares what the two report, and then
+requires a second restore over the same target to fail. A backup that has never been restored is not a
+backup, so the drill runs on every commit rather than on a schedule someone forgets.
+
+`docs/RUNBOOKS.md` covers restarting, a leaked secret, a compromised identity, a store that sealed
+itself, break-glass with no session token, and restoring from a snapshot.
+
+Response wrapping is dropped rather than deferred, and the reasoning belongs here. Its purpose is
+handing a secret through a channel you do not fully trust, and every such channel in this design is
+already closed: values never appear in command arguments, the audit log has no field for them, and a
+consumer that can authenticate can read directly. It would add an endpoint, a table and a single-use
+protocol to solve a problem this store does not currently have. If a third party ever needs a one-time
+handoff, that is when to build it.
+
+## What v1 does not have
+
+Written down so none of it is discovered during an incident.
+
+- Key encryption key rotation. The derivation supports versions and `Rewrap` exists, but nothing
+  raises the version.
+- Token binding enforcement. Recorded but not enforced; it needs mTLS, where the value is observed
+  rather than claimed.
+- A liveness check against the control plane, so a destroyed instance cannot spend an assertion still
+  inside its expiry window.
+- An audit anchor outside the host. The chain detects partial tampering, not a rewrite by whoever can
+  write the whole file.
+- Parameter versioning, and therefore parameter rollback.
+- High availability, disaster recovery replication, dynamic secrets, a PKI engine, transit encryption,
+  and a web UI, all deferred beyond v1 from the start.
 
 ## Deferred beyond v1
 

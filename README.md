@@ -12,10 +12,13 @@ with a bounded lifetime, and every read is recorded in a tamper-evident audit lo
 
 ## Status
 
-Early development, but usable end to end: the server starts sealed, is initialized and unsealed with
-Shamir shares, authenticates workloads, and serves versioned encrypted secrets behind policy. See
-[docs/ROADMAP.md](docs/ROADMAP.md) for what is still missing, most notably leases, the parameter
-store, and audit logging.
+v1 is complete. The server starts sealed, is initialized and unsealed with Shamir shares,
+authenticates workloads against bootstrap tokens or control plane assertions, serves versioned
+encrypted secrets and typed parameters behind policy, issues leases that make scoped revocation
+possible, and records every access in a hash chained log it refuses to run without.
+
+[docs/ROADMAP.md](docs/ROADMAP.md) ends with a list of what v1 does not have. Read it before relying
+on this for anything that matters.
 
 | Endpoint | Description |
 |---|---|
@@ -172,6 +175,7 @@ first non-flag token.
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Every `MARSEC_*` environment variable |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | `systemd` unit, host hardening, and how to verify a running instance |
 | [docs/AGENT.md](docs/AGENT.md) | The agent that lets an unmodified application use the store |
+| [docs/RUNBOOKS.md](docs/RUNBOOKS.md) | What to do when a secret leaks, the store seals itself, or a restore is needed |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Milestones, in order, with the reasoning behind the order |
 | [docs/adr/](docs/adr/) | Architecture decision records |
 
@@ -183,6 +187,7 @@ first non-flag token.
 | `make test` | Unit tests |
 | `make cover` | Unit tests with a coverage summary |
 | `make arch-check` | Fails if a module imports another module |
+| `make drill` | Saves, verifies and restores a snapshot, and fails if the copy differs |
 | `make security` | `govulncheck` and `gitleaks` |
 | `make hooks` | Installs a pre-commit hook that runs `make check` |
 | `make vm-up` | Starts the Linux VM the process protections can be tested in |

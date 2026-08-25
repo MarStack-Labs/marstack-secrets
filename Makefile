@@ -7,7 +7,7 @@ GITLEAKS_VERSION := 8.30.1
 VM := marsec-dev
 VM_DIR := $(CURDIR)
 
-.PHONY: help check build run clean fmt fmt-check vet test test-race cover arch-check security govulncheck gitleaks hooks vm-up vm-test vm-shell vm-down
+.PHONY: help check build run clean fmt fmt-check vet test test-race cover arch-check drill security govulncheck gitleaks hooks vm-up vm-test vm-shell vm-down
 
 help:
 	@echo "check        run every gate that CI runs"
@@ -17,6 +17,7 @@ help:
 	@echo "test-race    run unit tests with the race detector"
 	@echo "cover        run unit tests and report coverage"
 	@echo "arch-check   enforce module boundaries"
+	@echo "drill        save, verify and restore a snapshot end to end"
 	@echo "security     run govulncheck and gitleaks"
 	@echo "hooks        install the pre-commit hook"
 	@echo "vm-up        start the linux test vm"
@@ -24,7 +25,7 @@ help:
 	@echo "vm-shell     open a shell in the linux vm"
 	@echo "vm-down      stop and delete the linux vm"
 
-check: fmt-check vet arch-check test-race security
+check: fmt-check vet arch-check test-race drill security
 
 build:
 	@mkdir -p $(BIN_DIR)
@@ -66,6 +67,9 @@ cover:
 
 arch-check:
 	@sh scripts/check-architecture.sh
+
+drill: build
+	@sh scripts/restore-drill.sh $(BIN_DIR)/$(BINARY)
 
 security: govulncheck gitleaks
 

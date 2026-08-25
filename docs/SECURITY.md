@@ -94,6 +94,21 @@ a second process running as `marstack-secrets` could read the root key straight 
 
 Verification commands and expected values are in [DEPLOYMENT.md](DEPLOYMENT.md).
 
+## The audit log, and what a hash chain does not do
+
+Records are append only, hash chained, `fsync`ed before the write returns, and carry no secret value
+— only who, what, which version, and the outcome. Editing, removing, reordering or truncating a
+record breaks the chain from that point on, and `Verify` names the record where it broke. The server
+refuses to start on a broken chain, because a log that cannot be trusted makes nothing else
+verifiable either.
+
+What a chain does not do, asserted by `TestRewritingTheWholeLogIsNotDetected`: anyone who can write
+the whole file can rewrite every record and recompute every hash, and verification will pass. A chain
+detects partial tampering, not a rewrite by someone with full write access. Closing that gap needs an
+anchor outside the host — shipping records as they are written, or publishing the tip hash somewhere
+append only. Neither is built, and the test exists so this is a known property rather than an
+assumption.
+
 ## Threat boundary
 
 The process holds key material in memory once unsealed. Anything able to read that memory is

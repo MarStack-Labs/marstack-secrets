@@ -36,7 +36,12 @@ plaintexts but never a key. M2 supplies the sealed implementation of that interf
 Nothing in M1 is exposed over HTTP. A secret endpoint that predates M3 would be an unauthenticated
 secret endpoint, so the engine stays reachable from Go code and tests until authentication exists.
 
-## M2 — Seal and unseal
+## M2 — Seal and unseal (in progress)
+
+Shamir secret sharing is done, in `internal/platform/crypto`. Splitting and combining happen over
+GF(256) using loop based multiplication rather than lookup tables, so no memory access depends on
+secret data. Every subset of the threshold size reconstructs the secret and no smaller subset does,
+which is asserted across all ten three-of-five combinations rather than a single sampled one.
 
 The process boots sealed and serves only `sys/health`, `sys/seal-status`, and `sys/unseal`. Root key
 split with Shamir 3-of-5, verified against a key check value, held in `mlock`ed memory and zeroed on

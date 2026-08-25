@@ -11,7 +11,9 @@ import (
 
 	"github.com/marstack-labs/marstack-secrets/internal/modules/auth"
 	"github.com/marstack-labs/marstack-secrets/internal/modules/health"
+	"github.com/marstack-labs/marstack-secrets/internal/modules/policy"
 	"github.com/marstack-labs/marstack-secrets/internal/modules/seal"
+	"github.com/marstack-labs/marstack-secrets/internal/modules/secret"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/config"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/httpx"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/jwt"
@@ -44,25 +46,53 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*App, err
 		return nil, err
 	}
 
-	sealManager, err := seal.NewManager(db, seal.Options{})
+	app, err := assemble(ctx, cfg, logger, db)
 	if err != nil {
 		return nil, errors.Join(err, db.Close())
 	}
+	return app, nil
+}
+
+func assemble(ctx context.Context, cfg config.Config, logger *slog.Logger, db *sql.DB) (*App, error) {
+	sealManager, err := seal.NewManager(db, seal.Options{})
+	if err != nil {
+		return nil, err
+	}
 	if err := sealManager.Migrate(ctx); err != nil {
-		return nil, errors.Join(err, db.Close())
+		return nil, err
 	}
 
 	authManager, err := auth.NewManager(db, auth.Options{})
 	if err != nil {
-		return nil, errors.Join(err, db.Close())
+		return nil, err
 	}
 	if err := authManager.Migrate(ctx); err != nil {
-		return nil, errors.Join(err, db.Close())
+		return nil, err
+	}
+
+	policyManager, err := policy.NewManager(db, policy.Options{})
+	if err != nil {
+		return nil, err
+	}
+	if err := policyManager.Migrate(ctx); err != nil {
+		return nil, err
+	}
+
+	store, err := secret.NewStore(db, secret.Options{})
+	if err != nil {
+		return nil, err
+	}
+	secretService, err := secret.NewService(store, sealManager.Cipher())
+	if err != nil {
+		return nil, err
+	}
+	if err := secretService.Migrate(ctx); err != nil {
+		return nil, err
 	}
 
 	assertions, err := instanceVerifier(cfg)
 	if err != nil {
-		return nil, errors.Join(err, db.Close())
+		return nil, err
 	}
 	if assertions == nil {
 		logger.Warn("instance logins are disabled; set MARSEC_CONTROL_PLANE_ISSUER and MARSEC_CONTROL_PLANE_JWKS_FILE to accept them")
@@ -70,8 +100,11 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*App, err
 
 	limits, err := rateLimits(cfg)
 	if err != nil {
-		return nil, errors.Join(err, db.Close())
+		return nil, err
 	}
+
+	authModule := auth.NewModule(authManager, logger, assertions, limits)
+	guard := authModule.Require
 
 	return &App{
 		cfg:    cfg,
@@ -81,7 +114,9 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*App, err
 		modules: []Module{
 			health.New(),
 			seal.NewModule(sealManager, logger),
-			auth.NewModule(authManager, logger, assertions, limits),
+			authModule,
+			policy.NewModule(policyManager, guard, logger),
+			secret.NewModule(secretService, policyManager, guard, logger),
 		},
 	}, nil
 }

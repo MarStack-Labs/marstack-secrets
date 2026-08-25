@@ -75,7 +75,7 @@ func TestHandlerServesRegisteredModules(t *testing.T) {
 
 func TestModuleNames(t *testing.T) {
 	names := testApp(t).ModuleNames()
-	want := []string{"health", "seal", "auth"}
+	want := []string{"health", "seal", "auth", "policy", "secret"}
 	if len(names) != len(want) {
 		t.Fatalf("ModuleNames() = %v, want %v", names, want)
 	}

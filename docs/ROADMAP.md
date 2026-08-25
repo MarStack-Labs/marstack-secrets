@@ -8,7 +8,7 @@ and tested.
 Modular monolith layout, dependency rules enforced by `make arch-check`, configuration with secure
 defaults, structured logging, middleware chain, `GET /v1/sys/health`, CI with security gates.
 
-## M1 — Storage and envelope encryption (in progress)
+## M1 — Storage and envelope encryption (done)
 
 Envelope encryption is done, in `internal/platform/crypto`. A fresh data encryption key per sealed
 value, wrapped by a key encryption key, with AES-256-GCM throughout. Additional authenticated data
@@ -28,8 +28,10 @@ check-and-set rejects a write whose expectation no longer matches, delete is rev
 erases the stored material, and versions beyond the configured limit are destroyed automatically.
 The repository stores sealed envelopes and never sees a plaintext.
 
-Still to come in M1: the service that composes the repository with envelope encryption, taking the
-key encryption key through an interface so M2 can supply the sealed one.
+`secret.Service` composes the two. It seals inside the write transaction, using the version the
+transaction is about to assign, so the authenticated data and the stored version can never disagree.
+Key material reaches it through a `Cipher` interface it declares itself, so the service holds
+plaintexts but never a key. M2 supplies the sealed implementation of that interface.
 
 Nothing in M1 is exposed over HTTP. A secret endpoint that predates M3 would be an unauthenticated
 secret endpoint, so the engine stays reachable from Go code and tests until authentication exists.

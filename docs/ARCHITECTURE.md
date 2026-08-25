@@ -80,6 +80,10 @@ module cannot opt out of them.
 
 ## What is not in the architecture yet
 
-Storage, cryptography, sealing, authentication, authorisation, leases, and auditing. Each arrives as
-its own module or platform package as the roadmap progresses. The boundaries above exist now so that
-those modules land in a structure rather than creating one.
+Storage, sealing, authentication, authorisation, leases, and auditing. Each arrives as its own module
+or platform package as the roadmap progresses. The boundaries above exist now so that those modules
+land in a structure rather than creating one.
+
+`internal/platform/crypto` exists and has no HTTP surface. It is reachable only from Go code, which
+is deliberate: a secret endpoint that predates authentication would be an unauthenticated secret
+endpoint, however briefly.

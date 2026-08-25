@@ -8,12 +8,20 @@ and tested.
 Modular monolith layout, dependency rules enforced by `make arch-check`, configuration with secure
 defaults, structured logging, middleware chain, `GET /v1/sys/health`, CI with security gates.
 
-## M1 — Storage and envelope encryption
+## M1 — Storage and envelope encryption (in progress)
 
-SQLite with write-ahead logging and `fsync` before acknowledging a write. Versioned paths, soft
-delete and undelete, check-and-set on write. AES-256-GCM with additional authenticated data binding
-each ciphertext to `tenant|path|version`, so a ciphertext moved to another path fails to decrypt
-rather than decrypting somewhere it does not belong.
+Envelope encryption is done, in `internal/platform/crypto`. A fresh data encryption key per sealed
+value, wrapped by a key encryption key, with AES-256-GCM throughout. Additional authenticated data
+binds every ciphertext to a length-prefixed encoding of `tenant`, `path`, and `version`, so a
+ciphertext moved to another location fails to decrypt rather than decrypting somewhere it does not
+belong. `Rewrap` rotates a key encryption key by rewrapping data keys only, leaving payloads
+untouched.
+
+Still to come: SQLite with write-ahead logging and `fsync` before acknowledging a write, versioned
+paths, soft delete and undelete, and check-and-set on write.
+
+Nothing in M1 is exposed over HTTP. A secret endpoint that predates M3 would be an unauthenticated
+secret endpoint, so the engine stays reachable from Go code and tests until authentication exists.
 
 ## M2 — Seal and unseal
 

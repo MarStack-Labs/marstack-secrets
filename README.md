@@ -120,6 +120,35 @@ curl -s -X POST http://127.0.0.1:8200/v1/sys/policies/check \
  "reason":"an explicitly denying rule matched, and denial always wins","policies":["writer"]}
 ```
 
+Once a store is running, the same binary is the client:
+
+```sh
+export MARSEC_ADDRESS=https://secrets.internal:8200
+export MARSEC_CACERT=/etc/marstack-secrets/tls/ca.pem
+
+marsec login --bootstrap-file /run/bootstrap-token
+logged in; token kept in /root/.marsec/token, expires 2026-08-25T14:21:41Z
+
+printf 'db_password=s3cr3t' | marsec secret put prod/apps/payment/db
+wrote version 1
+
+marsec secret get prod/apps/payment/db
+db_password=s3cr3t
+
+printf 'rotated' | marsec secret put prod/apps/payment/db --cas 1
+wrote version 2
+
+marsec param get prod/apps/billing/log_level --verbose
+kind      string
+from      log_level
+inherited true
+sensitive false
+warn
+```
+
+Values come from stdin. `--value` works but warns, because a secret in a command line is a secret in
+everyone's `ps` output.
+
 Every access leaves a record, and the chain can be checked at any time:
 
 ```sh

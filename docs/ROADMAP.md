@@ -248,8 +248,17 @@ Plaintext HTTP needs an explicit opt-in, TLS 1.3 is the floor, responses are siz
 status the store can answer with becomes a named error, including a sealed store distinguished from
 any other outage — an agent needs to tell "wait and retry" from "this will not work".
 
-Still to come in M8: the CLI commands, and the agent that logs in, renders templates, renews leases
-before expiry, and serves a last-known-good cache when the store is unreachable.
+The client commands are done: `login`, `status`, `secret get|put|delete`, `param get|put`.
+
+Values are read from stdin by default. Passing `--value` works but prints a warning, because process
+arguments are readable by other users on the host and a secret on a command line is a secret in
+everyone's `ps` output.
+
+The session token is kept in a `0600` file, `MARSEC_TOKEN` overrides it for a single call, and a
+missing session says to run `marsec login` rather than reporting a bare 401.
+
+Still to come in M8: the agent that logs in, renders templates, renews leases before expiry, and
+serves a last-known-good cache when the store is unreachable.
 
 ## M9 — Operations
 

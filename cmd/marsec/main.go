@@ -35,6 +35,14 @@ func run(args []string) error {
 		return serve()
 	case "operator":
 		return runOperator(context.Background(), os.Stdout, args[1:])
+	case "login":
+		return runLogin(context.Background(), os.Stdout, args[1:])
+	case "secret":
+		return runSecret(context.Background(), os.Stdout, args[1:])
+	case "param":
+		return runParam(context.Background(), os.Stdout, args[1:])
+	case "status":
+		return runStatus(context.Background(), os.Stdout, args[1:])
 	case "version":
 		fmt.Println(version)
 		return nil
@@ -94,11 +102,19 @@ func usage() {
 
 Usage:
   marsec server     start the server
-  marsec operator   local administration; see marsec operator
+  marsec operator   local administration on the server host
+  marsec login      exchange a credential for a session token
+  marsec status     report whether the store is sealed
+  marsec secret     get, put or delete a secret
+  marsec param      get or put a parameter
   marsec version    print the binary version
   marsec help       show this message
 
-The server is configured through MARSEC_* environment variables.
-See docs/CONFIGURATION.md for the full list.
+The server reads MARSEC_* environment variables; see docs/CONFIGURATION.md.
+Client commands read MARSEC_ADDRESS, MARSEC_CACERT, MARSEC_TOKEN and
+MARSEC_TOKEN_FILE.
+
+Values are read from stdin unless --value is given, because arguments are
+visible to other users in process listings.
 `)
 }

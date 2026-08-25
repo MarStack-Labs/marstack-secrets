@@ -27,6 +27,21 @@ rather than one at a time.
 | `MARSEC_SWEEP_BATCH` | `500` | Rows removed per sweep, so one pass cannot stall writes |
 | `MARSEC_AUDIT_FILE` | `<data dir>/audit.log` | Where the audit log is written |
 
+## Client commands
+
+`marsec login`, `status`, `secret` and `param` read a different set of variables, since they talk to
+a store rather than being one.
+
+| Variable | Default | Description |
+|---|---|---|
+| `MARSEC_ADDRESS` | `https://127.0.0.1:8200` | Store to talk to |
+| `MARSEC_CACERT` | none | Certificate authority that signed the store's certificate |
+| `MARSEC_TOKEN` | none | Session token, overriding the token file for one call |
+| `MARSEC_TOKEN_FILE` | `~/.marsec/token` | Where `marsec login` keeps the session token, mode `0600` |
+
+Plaintext HTTP needs `--allow-plain-http`, so a token cannot reach the wire unencrypted by leaving a
+variable unset.
+
 ## Validation rules
 
 - `MARSEC_DATA_DIR` must be an absolute path.

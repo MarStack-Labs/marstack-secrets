@@ -67,19 +67,37 @@ requests cannot be verified while Actions are off.
 - A plaintext never reaches the database.
 - Destroyed material is absent from the raw database and write-ahead log files.
 
+## Process protections
+
+Applied at startup, before any key exists. Failure to apply any of them stops the process unless
+`MARSEC_ALLOW_UNPROTECTED_MEMORY` is set.
+
+| Control | Effect |
+|---|---|
+| `mlockall(MCL_CURRENT\|MCL_FUTURE)` | Key material cannot be paged to swap |
+| `RLIMIT_CORE = 0` | A crash cannot write the root key to disk |
+| `PR_SET_DUMPABLE = 0` | `/proc/<pid>/mem` and `maps` belong to root, not the service user |
+
+The third is the one that is easy to miss. Without it those entries belong to the service account, so
+a second process running as `marstack-secrets` could read the root key straight out of memory.
+
+Verification commands and expected values are in [DEPLOYMENT.md](DEPLOYMENT.md).
+
 ## Threat boundary
 
 The process holds key material in memory once unsealed. Anything able to read that memory is
 inside the boundary:
 
-- The kernel and anything with `CAP_SYS_PTRACE` or access to `/proc/<pid>/mem`.
+- The kernel and anything with `CAP_SYS_PTRACE`. `PR_SET_DUMPABLE=0` keeps `/proc/<pid>/mem` away
+  from the service account, but root is still root.
 - The hypervisor. On a third-party VPS the provider can snapshot guest RAM, and no in-guest control
   prevents it. Running on rented infrastructure is an accepted risk, not a mitigated one.
-- Swap and core dumps. Both are disabled at deployment time; see the deployment section of the
-  specification.
+- Swap. Disabled at deployment time as a second line behind `mlock`; see
+  [DEPLOYMENT.md](DEPLOYMENT.md).
 
 Explicitly outside the current scope, because the corresponding features do not exist yet:
-authentication, authorisation, sealing, audit logging.
+authentication, authorisation, and audit logging. Until they land, nothing but the seal endpoints is
+reachable over HTTP.
 
 ## Reporting
 

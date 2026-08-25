@@ -4,8 +4,10 @@ PKG := ./...
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X main.version=$(VERSION)
 GITLEAKS_VERSION := 8.30.1
+VM := marsec-dev
+VM_DIR := $(CURDIR)
 
-.PHONY: help check build run clean fmt fmt-check vet test test-race cover arch-check security govulncheck gitleaks hooks
+.PHONY: help check build run clean fmt fmt-check vet test test-race cover arch-check security govulncheck gitleaks hooks vm-up vm-test vm-shell vm-down
 
 help:
 	@echo "check        run every gate that CI runs"
@@ -17,6 +19,10 @@ help:
 	@echo "arch-check   enforce module boundaries"
 	@echo "security     run govulncheck and gitleaks"
 	@echo "hooks        install the pre-commit hook"
+	@echo "vm-up        start the linux test vm"
+	@echo "vm-test      run the test suite inside the linux vm"
+	@echo "vm-shell     open a shell in the linux vm"
+	@echo "vm-down      stop and delete the linux vm"
 
 check: fmt-check vet arch-check test-race security
 
@@ -26,6 +32,7 @@ build:
 
 run: build
 	MARSEC_ALLOW_INSECURE_HTTP=true \
+	MARSEC_ALLOW_UNPROTECTED_MEMORY=true \
 	MARSEC_DATA_DIR=$(CURDIR)/.data \
 	MARSEC_LOG_LEVEL=debug \
 	./$(BIN_DIR)/$(BINARY) server
@@ -78,3 +85,15 @@ hooks:
 	@printf '#!/bin/sh\nexec make check\n' > .git/hooks/pre-commit
 	@chmod +x .git/hooks/pre-commit
 	@echo "pre-commit hook installed"
+
+vm-up:
+	limactl start --name=$(VM) --tty=false lima/$(VM).yaml
+
+vm-test:
+	limactl shell $(VM) bash -lc 'cd $(VM_DIR) && go vet ./... && go test -race ./...'
+
+vm-shell:
+	limactl shell $(VM) bash -lc 'cd $(VM_DIR) && exec bash'
+
+vm-down:
+	limactl delete --force $(VM)

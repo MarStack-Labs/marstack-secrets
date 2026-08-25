@@ -15,13 +15,14 @@ const envPrefix = "MARSEC_"
 type Getenv func(string) string
 
 type Config struct {
-	ListenAddr        string
-	DataDir           string
-	TLSCertFile       string
-	TLSKeyFile        string
-	LogLevel          string
-	ShutdownTimeout   time.Duration
-	AllowInsecureHTTP bool
+	ListenAddr             string
+	DataDir                string
+	TLSCertFile            string
+	TLSKeyFile             string
+	LogLevel               string
+	ShutdownTimeout        time.Duration
+	AllowInsecureHTTP      bool
+	AllowUnprotectedMemory bool
 }
 
 func Default() Config {
@@ -53,6 +54,12 @@ func Load(getenv Getenv) (Config, error) {
 		return Config{}, err
 	}
 	cfg.AllowInsecureHTTP = insecure
+
+	unprotected, err := boolVar(getenv, "ALLOW_UNPROTECTED_MEMORY", cfg.AllowUnprotectedMemory)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.AllowUnprotectedMemory = unprotected
 
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err

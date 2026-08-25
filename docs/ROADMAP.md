@@ -36,7 +36,7 @@ plaintexts but never a key. M2 supplies the sealed implementation of that interf
 Nothing in M1 is exposed over HTTP. A secret endpoint that predates M3 would be an unauthenticated
 secret endpoint, so the engine stays reachable from Go code and tests until authentication exists.
 
-## M2 — Seal and unseal (in progress)
+## M2 — Seal and unseal (done)
 
 Shamir secret sharing is done, in `internal/platform/crypto`. Splitting and combining happen over
 GF(256) using loop based multiplication rather than lookup tables, so no memory access depends on
@@ -58,8 +58,12 @@ paths through an optional interface, the same way it owns its routes and its sch
 before there is anything to gate, so a route added in M3 is refused by default rather than by
 remembering to add it.
 
-Still to come in M2: `mlock`ed memory and zeroing on shutdown, auto-seal when the audit sink fails,
-the `systemd` unit and host hardening.
+Process protections are applied before any key exists: memory locked, core dumps disabled, and the
+process made undumpable. Any failure stops the process unless the operator explicitly opted out. The
+`systemd` unit supplies the capability and the resource limit that make locking possible, and
+`lima/marsec-dev.yaml` provides the Linux VM the whole thing is verified in.
+
+Auto-seal when the audit sink fails belongs with M7, since there is no audit sink to fail yet.
 
 ## M3 — Authentication
 

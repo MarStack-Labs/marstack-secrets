@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/marstack-labs/marstack-secrets/internal/app"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/config"
+	"github.com/marstack-labs/marstack-secrets/internal/platform/hardening"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/logging"
 )
 
@@ -50,6 +52,11 @@ func serve() error {
 	}
 
 	logger := logging.New(cfg.LogLevel, os.Stdout)
+
+	if err := protect(logger, cfg.AllowUnprotectedMemory); err != nil {
+		return err
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -64,6 +71,20 @@ func serve() error {
 	}()
 
 	return application.Run(ctx)
+}
+
+func protect(logger *slog.Logger, allowUnprotected bool) error {
+	report, err := hardening.Apply()
+	if err == nil {
+		logger.Info("process protections applied", "hardening", report)
+		return nil
+	}
+	if allowUnprotected {
+		logger.Warn("running without full process protections; key material may reach swap or a core dump",
+			"hardening", report, "error", err)
+		return nil
+	}
+	return fmt.Errorf("%w\nset MARSEC_ALLOW_UNPROTECTED_MEMORY=true to run anyway, for local development only", err)
 }
 
 func usage() {

@@ -64,6 +64,7 @@ over.
 | [docs/ENGINEERING-PRINCIPLES.md](docs/ENGINEERING-PRINCIPLES.md) | How KISS, DRY, YAGNI, SoC and SOLID are applied here |
 | [docs/SECURITY.md](docs/SECURITY.md) | Shift-left security practices and the threat boundary |
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Every `MARSEC_*` environment variable |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | `systemd` unit, host hardening, and how to verify a running instance |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Milestones, in order, with the reasoning behind the order |
 | [docs/adr/](docs/adr/) | Architecture decision records |
 
@@ -77,12 +78,17 @@ over.
 | `make arch-check` | Fails if a module imports another module |
 | `make security` | `govulncheck` and `gitleaks` |
 | `make hooks` | Installs a pre-commit hook that runs `make check` |
+| `make vm-up` | Starts the Linux VM the process protections can be tested in |
+| `make vm-test` | Runs the suite inside that VM |
 
 Run `make hooks` once after cloning. GitHub Actions is disabled on this repository, so the
 pre-commit hook is where the security and architecture gates actually run.
 
 ## Requirements
 
+- Linux to run the server. macOS is for development only: the process protections have no macOS
+  equivalent, so the server refuses to start unless `MARSEC_ALLOW_UNPROTECTED_MEMORY=true`
+- Lima, if you want `make vm-up` to give you a Linux VM for testing
 - Go 1.26.6 or newer. Earlier 1.26 patch releases carry standard library vulnerabilities reachable
   from the TLS listener, so `go.mod` requires the fixed toolchain
 - `gitleaks` on `PATH` for `make security`

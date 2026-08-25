@@ -1,0 +1,6 @@
+MARSEC_LISTEN_ADDR=127.0.0.1:8200
+MARSEC_DATA_DIR=/var/lib/marstack-secrets
+MARSEC_TLS_CERT_FILE=/etc/marstack-secrets/tls/server.pem
+MARSEC_TLS_KEY_FILE=/etc/marstack-secrets/tls/server-key.pem
+MARSEC_LOG_LEVEL=info
+MARSEC_SHUTDOWN_TIMEOUT=15s

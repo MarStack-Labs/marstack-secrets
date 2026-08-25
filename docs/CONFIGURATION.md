@@ -13,6 +13,7 @@ rather than one at a time.
 | `MARSEC_LOG_LEVEL` | `info` | One of `debug`, `info`, `warn`, `error` |
 | `MARSEC_SHUTDOWN_TIMEOUT` | `15s` | Grace period for in-flight requests on shutdown |
 | `MARSEC_ALLOW_INSECURE_HTTP` | `false` | Serve plaintext HTTP. Local development only |
+| `MARSEC_ALLOW_UNPROTECTED_MEMORY` | `false` | Start even when memory cannot be locked. Local development only |
 
 ## Validation rules
 
@@ -20,6 +21,10 @@ rather than one at a time.
 - `MARSEC_SHUTDOWN_TIMEOUT` must be greater than zero.
 - Either TLS material is supplied, or `MARSEC_ALLOW_INSECURE_HTTP` is true. Supplying both is an
   error, so there is never a question about which transport is actually in use.
+- `MARSEC_ALLOW_UNPROTECTED_MEMORY` is separate from the transport switch on purpose. Running without
+  TLS and running with key material that can reach swap are different risks, and accepting one should
+  never silently accept the other. On macOS the protections do not exist at all, so local development
+  there needs this variable.
 
 ## Production example
 
@@ -41,6 +46,7 @@ Equivalent to:
 
 ```sh
 MARSEC_ALLOW_INSECURE_HTTP=true \
+MARSEC_ALLOW_UNPROTECTED_MEMORY=true \
 MARSEC_DATA_DIR="$PWD/.data" \
 MARSEC_LOG_LEVEL=debug \
 ./bin/marsec server

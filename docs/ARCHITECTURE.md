@@ -61,6 +61,12 @@ A module owns its own routes. There is no central routing table listing every pa
 because that file becomes a merge-conflict magnet and a place where a route can be registered
 without the owning module noticing.
 
+A module also owns its own schema. It declares its migrations and passes them to `sqlite.Migrate`
+under its own name, for the same reason there is no central routing table.
+
+A module satisfies the contract only once it has an HTTP surface to expose. `internal/modules/secret`
+is a module with a Go API and no routes, and it stays that way until authentication exists in M3.
+
 ## Adding a module
 
 1. Create `internal/modules/<name>/`.

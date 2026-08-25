@@ -23,8 +23,13 @@ Pragmas are read back during `Open`, so one that fails to apply is a startup err
 silent assumption. Migrations are owned per module and checksummed, so editing a migration that has
 already run is an error rather than a no-op.
 
-Still to come: the versioned secret repository — paths with versions, soft delete and undelete,
-check-and-set on write, and the service that composes it with envelope encryption.
+The versioned repository is done, in `internal/modules/secret`. Every write creates a new version,
+check-and-set rejects a write whose expectation no longer matches, delete is reversible, destroy
+erases the stored material, and versions beyond the configured limit are destroyed automatically.
+The repository stores sealed envelopes and never sees a plaintext.
+
+Still to come in M1: the service that composes the repository with envelope encryption, taking the
+key encryption key through an interface so M2 can supply the sealed one.
 
 Nothing in M1 is exposed over HTTP. A secret endpoint that predates M3 would be an unauthenticated
 secret endpoint, so the engine stays reachable from Go code and tests until authentication exists.

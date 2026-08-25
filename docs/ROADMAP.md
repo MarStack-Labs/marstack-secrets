@@ -137,11 +137,28 @@ guard over.
 Undelete and destroy remain reachable only from Go and the operator CLI. Nothing needs them over HTTP
 yet, and the capability set they would use is already in the engine.
 
-## M5 — Leases
+## M5 — Leases (in progress)
 
-Every secret read issues a lease. Renew, revoke, revoke by prefix, revoke by identity. Expiry sweeper
-with jitter and batch limits. A webhook from the control plane revokes by identity when an instance
-is destroyed.
+What a lease is here, stated plainly: a lease on a static secret cannot claw the value back. The
+client already holds the plaintext, and no amount of bookkeeping changes that. Pretending otherwise
+would be the worst kind of security theatre.
+
+What a lease does is record who holds which version of which path until when, and that record is what
+makes scoped revocation possible. Without it there is no way to answer "which identities hold copies
+of anything under secret/prod/payment/", and therefore no way to revoke exactly those.
+
+So revocation acts on access rather than on copies. Revoking by prefix or by identity revokes the
+holders' tokens, which forces re-authentication: a live instance re-authenticates by itself, while a
+stolen token cannot. The result reports how many leases and tokens went, because during an incident
+the next question is always how much.
+
+The manager is done, in `internal/modules/lease`. A repeated read reuses one lease rather than
+creating a row per request, which a schema level partial unique index enforces rather than trusting
+the code. Reissuing extends an expiry and never shortens it. Sweeping is batched and keeps a
+retention window, so recent history survives while the table stays bounded.
+
+Still to come in M5: issuing a lease on every secret read, the lease endpoints, the sweeper loop with
+jitter, and the control plane webhook that revokes by identity when an instance is destroyed.
 
 ## M6 — Parameter store
 

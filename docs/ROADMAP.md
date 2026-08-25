@@ -174,10 +174,29 @@ converge on the same instant.
 Not built: the control plane webhook that revokes by identity when an instance is destroyed. It needs
 marstack-cloud to emit the event, and `RevokeIdentity` is already there to receive it.
 
-## M6 — Parameter store
+## M6 — Parameter store (in progress)
 
-Typed values, hierarchical inheritance, and references to secrets. A resolved reference is treated as
-a secret: not cached, always audited, and requiring read capability on the referenced path.
+Typing and inheritance are done, in `internal/modules/param`. A value declares one of `string`,
+`int`, `bool` or `stringlist` and is validated on write, so a wrong type is caught where it is typed
+rather than when an application crashes reading it.
+
+Resolution walks up towards the tenant root: `apps/payment/log_level` falls back to `apps/log_level`
+and then `log_level`. The nearest definition wins, and the result reports which path supplied it, so
+an operator debugging inheritance can see the answer rather than deduce it.
+
+Three deliberate departures from the specification, each because the specification was written before
+the code existed:
+
+- Inheritance never leaves the tenant. The original example fell back to `param/log_level` with no
+  tenant at all, which would let one tenant's default reach another. Isolation wins.
+- Parameters are not versioned in v1. Versioning is a second copy of the machinery the secret store
+  already has, and the audit log already records who changed what and when. Rollback is the thing
+  that is missing, and it is the trigger for adding versions.
+- Values reuse the same envelope encryption as secrets rather than a lighter scheme. One encryption
+  path is easier to keep correct than two, and encrypting a parameter more strongly than it needs
+  costs nothing.
+
+Still to come in M6: references to secrets, and the endpoints.
 
 ## M7 — Audit and metrics (done)
 

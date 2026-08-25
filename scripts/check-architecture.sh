@@ -25,6 +25,16 @@ if [ -n "$platform_upwards" ]; then
 	report "platform packages must not depend on modules or the composition root:" "$platform_upwards"
 fi
 
+client_downwards=$(grep -rnE "$module_path/internal/(modules|app)" internal/client --include='*.go' || true)
+if [ -n "$client_downwards" ]; then
+	report "the client must not depend on modules or the composition root:" "$client_downwards"
+fi
+
+server_to_client=$(grep -rn "$module_path/internal/client" internal/modules internal/platform internal/app --include='*.go' || true)
+if [ -n "$server_to_client" ]; then
+	report "the server must not depend on its own client:" "$server_to_client"
+fi
+
 if [ "$failed" -ne 0 ]; then
 	exit 1
 fi

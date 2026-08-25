@@ -236,11 +236,20 @@ course in ADR 0005.
 Scraping a sealed store is when the numbers matter most, and an authenticated endpoint would be
 unreachable then. No metric carries a tenant, path, or identity label.
 
-## M8 — Client tooling
+## M8 — Client tooling (in progress)
 
-Full CLI, and an agent that logs in, renders templates, renews leases before expiry, reloads the
-application on change, and serves a last-known-good cache when the server is unreachable. The agent
-is what lets an unmodified application use the store.
+The HTTP client is done, in `internal/client`, and it is a new peer of `app`, `modules` and
+`platform` rather than a package inside any of them. Two architecture rules came with it: the client
+must not import modules or the composition root, and the server must not import the client. Sharing
+types across that line would let a server change quietly become a client change, and a module that
+needed to call the API it serves would be a design problem rather than an import problem.
+
+Plaintext HTTP needs an explicit opt-in, TLS 1.3 is the floor, responses are size bounded, and every
+status the store can answer with becomes a named error, including a sealed store distinguished from
+any other outage — an agent needs to tell "wait and retry" from "this will not work".
+
+Still to come in M8: the CLI commands, and the agent that logs in, renders templates, renews leases
+before expiry, and serves a last-known-good cache when the store is unreachable.
 
 ## M9 — Operations
 

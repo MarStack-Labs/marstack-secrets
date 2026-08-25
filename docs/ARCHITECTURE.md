@@ -29,16 +29,22 @@ docs/
 ## Dependency rules
 
 ```
-cmd  ──▶  app  ──▶  modules  ──▶  platform
-                └──────────────▶  platform
+cmd  ──▶  app     ──▶  modules  ──▶  platform
+      │           └──────────────▶  platform
+      └──▶  client ──────────────▶  platform
 ```
 
-Four rules, enforced by `make arch-check`:
+Six rules, enforced by `make arch-check`:
 
 1. A module must not import another module.
 2. A module must not import `internal/app`.
 3. `internal/platform` must not import `internal/modules` or `internal/app`.
 4. Everything may import `internal/platform`.
+5. `internal/client` must not import modules or the composition root. It speaks to the store over
+   HTTP like any other caller, so sharing types with the server would let a server change quietly
+   become a client change.
+6. The server must not import `internal/client`. If a module ever needs to call the API it serves,
+   something is wrong with the design rather than with the import.
 
 Rule 1 is the one that keeps the monolith modular. When two modules need each other, the dependency
 goes through an interface that the consumer declares and the composition root satisfies — never

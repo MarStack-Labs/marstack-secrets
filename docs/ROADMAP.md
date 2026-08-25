@@ -179,7 +179,7 @@ marstack-cloud to emit the event, and `RevokeIdentity` is already there to recei
 Typed values, hierarchical inheritance, and references to secrets. A resolved reference is treated as
 a secret: not cached, always audited, and requiring read capability on the referenced path.
 
-## M7 — Audit and metrics (in progress)
+## M7 — Audit and metrics (done)
 
 The log is done, in `internal/platform/audit`, and wired through every module that touches a secret.
 Append only, hash chained, `fsync`ed before the response is returned, and carrying no value: the
@@ -197,7 +197,13 @@ What the chain does not do is written down in `docs/SECURITY.md` and pinned by a
 rewrite the whole file can recompute every hash and pass verification. Closing that needs an anchor
 off the host, which is not built.
 
-Still to come in M7: Prometheus metrics.
+Metrics are done, in `internal/platform/metrics`, exposed by `internal/modules/observe`. Written by
+hand rather than pulling in the Prometheus client, with the reasoning and the triggers for changing
+course in ADR 0005.
+
+`GET /v1/sys/metrics` is unauthenticated and answers while sealed, matching `sys/seal-status`.
+Scraping a sealed store is when the numbers matter most, and an authenticated endpoint would be
+unreachable then. No metric carries a tenant, path, or identity label.
 
 ## M8 — Client tooling
 

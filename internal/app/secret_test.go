@@ -639,3 +639,46 @@ func TestARefusedRecordRefusesTheRequestAndSealsTheStore(t *testing.T) {
 		t.Error("a failing audit sink did not seal the store")
 	}
 }
+
+func TestMetricsAreExposedAndScrapableWhileSealed(t *testing.T) {
+	h := newHarness(t)
+	token := h.session(t, "service/ci", "prod", writerPolicy(t))
+
+	h.do(t, http.MethodPut, "/v1/secret/data/prod/db", `{"value":"v"}`, token)
+	h.do(t, http.MethodGet, "/v1/secret/data/prod/db", "", token)
+
+	scraped := h.do(t, http.MethodGet, "/v1/sys/metrics", "", "")
+	if scraped.Code != http.StatusOK {
+		t.Fatalf("scraping returned %d: %s", scraped.Code, scraped.Body.String())
+	}
+	if got := scraped.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/plain") {
+		t.Errorf("content type = %q", got)
+	}
+
+	body := scraped.Body.String()
+	for _, expected := range []string{
+		"# TYPE marsec_http_requests_total counter",
+		"marsec_http_requests_total{",
+		"marsec_sealed 0",
+		"marsec_initialized 1",
+		"marsec_leases_active 1",
+		`marsec_audit_records_total{outcome="written"}`,
+	} {
+		if !strings.Contains(body, expected) {
+			t.Errorf("the scrape is missing %q:\n%s", expected, body)
+		}
+	}
+	if strings.Contains(body, "secret/prod/db") {
+		t.Error("a secret path reached the metrics output")
+	}
+
+	h.app.seal.Seal()
+
+	sealed := h.do(t, http.MethodGet, "/v1/sys/metrics", "", "")
+	if sealed.Code != http.StatusOK {
+		t.Fatalf("scraping a sealed store returned %d", sealed.Code)
+	}
+	if !strings.Contains(sealed.Body.String(), "marsec_sealed 1") {
+		t.Errorf("the sealed store does not report itself sealed:\n%s", sealed.Body.String())
+	}
+}

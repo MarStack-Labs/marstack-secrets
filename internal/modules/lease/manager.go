@@ -282,6 +282,14 @@ func (m *Manager) Active(ctx context.Context, tenant, identityID string) ([]Leas
 	return active, rows.Err()
 }
 
+func (m *Manager) CountActive(ctx context.Context) (int, error) {
+	var held int
+	err := m.db.QueryRowContext(ctx,
+		`SELECT count(*) FROM lease_records WHERE revoked_at IS NULL AND expires_at > ?`,
+		sqlite.FormatTime(m.now())).Scan(&held)
+	return held, err
+}
+
 func (m *Manager) Sweep(ctx context.Context, batch int) (int, error) {
 	if batch < 1 {
 		return 0, ErrInvalidBatch

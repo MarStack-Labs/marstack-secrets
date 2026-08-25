@@ -14,6 +14,7 @@ import (
 	"github.com/marstack-labs/marstack-secrets/internal/modules/auth"
 	"github.com/marstack-labs/marstack-secrets/internal/modules/health"
 	"github.com/marstack-labs/marstack-secrets/internal/modules/lease"
+	"github.com/marstack-labs/marstack-secrets/internal/modules/observe"
 	"github.com/marstack-labs/marstack-secrets/internal/modules/policy"
 	"github.com/marstack-labs/marstack-secrets/internal/modules/seal"
 	"github.com/marstack-labs/marstack-secrets/internal/modules/secret"
@@ -43,6 +44,7 @@ type App struct {
 	seal    *seal.Manager
 	leases  *lease.Manager
 	audit   *audit.Log
+	metrics *telemetry
 	modules []Module
 }
 
@@ -153,20 +155,23 @@ func assemble(ctx context.Context, cfg config.Config, logger *slog.Logger, db *s
 		return nil, err
 	}
 
-	sink := sealingSink{sink: trail, seal: sealManager, logger: logger}
+	instrument := newTelemetry(sealManager, leaseManager, trail)
+	sink := instrument.sink(sealingSink{sink: trail, seal: sealManager, logger: logger})
 
 	authModule := auth.NewModule(authManager, logger, assertions, limits, auth.Recording{Sink: sink})
 	guard := authModule.Require
 
 	return &App{
-		cfg:    cfg,
-		logger: logger,
-		db:     db,
-		seal:   sealManager,
-		leases: leaseManager,
-		audit:  trail,
+		cfg:     cfg,
+		logger:  logger,
+		db:      db,
+		seal:    sealManager,
+		leases:  leaseManager,
+		audit:   trail,
+		metrics: instrument,
 		modules: []Module{
 			health.New(),
+			observe.NewModule(instrument.registry),
 			seal.NewModule(sealManager, logger, sink),
 			authModule,
 			policy.NewModule(policyManager, guard, logger),
@@ -220,6 +225,7 @@ func (a *App) Handler() http.Handler {
 		httpx.RequestID,
 		httpx.SecurityHeaders,
 		httpx.AccessLog(a.logger),
+		a.metrics.middleware(),
 		requireUnsealed(a.seal.IsUnsealed, allowedWhileSealed),
 	)
 }

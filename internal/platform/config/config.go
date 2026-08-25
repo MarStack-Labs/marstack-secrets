@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/marstack-labs/marstack-secrets/internal/platform/logging"
@@ -130,7 +131,7 @@ func (c Config) Validate() error {
 }
 
 func stringVar(getenv Getenv, name, fallback string) string {
-	if raw := getenv(envPrefix + name); raw != "" {
+	if raw := strings.TrimSpace(getenv(envPrefix + name)); raw != "" {
 		return raw
 	}
 	return fallback

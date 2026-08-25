@@ -14,6 +14,10 @@ rather than one at a time.
 | `MARSEC_SHUTDOWN_TIMEOUT` | `15s` | Grace period for in-flight requests on shutdown |
 | `MARSEC_ALLOW_INSECURE_HTTP` | `false` | Serve plaintext HTTP. Local development only |
 | `MARSEC_ALLOW_UNPROTECTED_MEMORY` | `false` | Start even when memory cannot be locked. Local development only |
+| `MARSEC_CONTROL_PLANE_ISSUER` | none | Issuer expected in instance assertions. Enables instance login |
+| `MARSEC_CONTROL_PLANE_JWKS_FILE` | none | Path to the control plane Ed25519 key set. Enables instance login |
+| `MARSEC_CONTROL_PLANE_AUDIENCE` | `marstack-secrets` | Audience this store accepts in assertions |
+| `MARSEC_CONTROL_PLANE_SKEW` | `30s` | Tolerated clock skew, capped at one minute regardless |
 
 ## Validation rules
 
@@ -25,6 +29,12 @@ rather than one at a time.
   TLS and running with key material that can reach swap are different risks, and accepting one should
   never silently accept the other. On macOS the protections do not exist at all, so local development
   there needs this variable.
+
+- Instance login needs both `MARSEC_CONTROL_PLANE_ISSUER` and `MARSEC_CONTROL_PLANE_JWKS_FILE`.
+  Setting one without the other is an error rather than a partly enabled login. Setting neither leaves
+  `POST /v1/auth/instance/login` unrouted, so an unconfigured store answers `404` instead of
+  advertising a login it cannot perform.
+- Values are trimmed, and a value that is only whitespace counts as unset.
 
 ## Production example
 

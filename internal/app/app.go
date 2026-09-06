@@ -17,9 +17,12 @@ import (
 	"github.com/marstack-labs/marstack-secrets/internal/modules/observe"
 	"github.com/marstack-labs/marstack-secrets/internal/modules/param"
 	"github.com/marstack-labs/marstack-secrets/internal/modules/policy"
+	"github.com/marstack-labs/marstack-secrets/internal/modules/rotate"
 	"github.com/marstack-labs/marstack-secrets/internal/modules/seal"
 	"github.com/marstack-labs/marstack-secrets/internal/modules/secret"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/audit"
+	"github.com/marstack-labs/marstack-secrets/internal/platform/authn"
+	"github.com/marstack-labs/marstack-secrets/internal/platform/authz"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/config"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/crypto"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/httpx"
@@ -79,6 +82,64 @@ func (s secretReader) Reveal(ctx context.Context, tenant, path string) (crypto.S
 		return nil, 0, err
 	}
 	return value.Data, value.Version, nil
+}
+
+type keyRotator struct {
+	manager *seal.Manager
+}
+
+func (k keyRotator) KEKVersion(ctx context.Context) (int, error) {
+	status, err := k.manager.Status(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return status.KEKVersion, nil
+}
+
+func (k keyRotator) Rotate(ctx context.Context) (int, int, error) {
+	rotation, err := k.manager.Rotate(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+	return rotation.From, rotation.To, nil
+}
+
+type rotationAuthorizer struct {
+	manager *policy.Manager
+}
+
+func (a rotationAuthorizer) Permitted(ctx context.Context, identity authn.Identity, tenant, path string) (bool, error) {
+	decision, err := a.manager.Authorize(ctx, identity, tenant, path, authz.Write)
+	if err != nil {
+		return false, err
+	}
+	return decision.Allowed, nil
+}
+
+type secretRewrapper struct {
+	service *secret.Service
+}
+
+func (s secretRewrapper) Name() string {
+	return "secret"
+}
+
+func (s secretRewrapper) Rewrap(ctx context.Context) (rotate.Progress, error) {
+	progress, err := s.service.Rewrap(ctx)
+	return rotate.Progress{Examined: progress.Examined, Rewrapped: progress.Rewrapped}, err
+}
+
+type paramRewrapper struct {
+	store *param.Store
+}
+
+func (p paramRewrapper) Name() string {
+	return "param"
+}
+
+func (p paramRewrapper) Rewrap(ctx context.Context) (rotate.Progress, error) {
+	progress, err := p.store.Rewrap(ctx)
+	return rotate.Progress{Examined: progress.Examined, Rewrapped: progress.Rewrapped}, err
 }
 
 type leaseIssuer struct {
@@ -187,6 +248,21 @@ func assemble(ctx context.Context, cfg config.Config, logger *slog.Logger, db *s
 	authModule := auth.NewModule(authManager, logger, assertions, limits, auth.Recording{Sink: sink})
 	guard := authModule.Require
 
+	rotateModule, err := rotate.NewModule(rotate.Options{
+		Keys: keyRotator{manager: sealManager},
+		Subjects: []rotate.Subject{
+			secretRewrapper{service: secretService},
+			paramRewrapper{store: paramStore},
+		},
+		Authorizer: rotationAuthorizer{manager: policyManager},
+		Audit:      sink,
+		Guard:      guard,
+		Logger:     logger,
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	return &App{
 		cfg:     cfg,
 		logger:  logger,
@@ -212,6 +288,7 @@ func assemble(ctx context.Context, cfg config.Config, logger *slog.Logger, db *s
 				Guard:      guard,
 				Logger:     logger,
 			}),
+			rotateModule,
 			secret.NewModule(secretService, secret.ModuleOptions{
 				Authorizer: policyManager,
 				Leases:     leaseIssuer{manager: leaseManager},

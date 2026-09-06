@@ -84,7 +84,7 @@ func TestEveryModuleIsRegistered(t *testing.T) {
 		registered[name] = struct{}{}
 	}
 
-	for _, want := range []string{"health", "seal", "auth", "policy", "lease", "secret"} {
+	for _, want := range []string{"health", "observe", "seal", "auth", "policy", "lease", "param", "rotate", "secret"} {
 		if _, present := registered[want]; !present {
 			t.Errorf("module %q is not registered: %v", want, names)
 		}

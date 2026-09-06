@@ -71,6 +71,7 @@ requests cannot be verified while Actions are off.
 | Additional authenticated data | A ciphertext moved to another tenant, path, or version fails to decrypt |
 | `secure_delete=ON` | Destroying a version erases the bytes rather than marking the space free |
 | Database file `0600`, directory `0700` | Applied by `Open`, not left to the deployment |
+| Key encryption key rotation | A derived key that escaped the process can be retired from new writes and rewrapped out of old ones |
 
 ## Assertions kept by tests
 
@@ -85,6 +86,11 @@ requests cannot be verified while Actions are off.
 - A read with a broken audit sink returns 503 and no value, and leaves the store sealed.
 - Every secret access, allowed or refused, appears in the log with its version.
 - Destroyed material is absent from the raw database and write-ahead log files.
+- A value stays readable under a key encryption key version it was not sealed under.
+- A rotation replaces the wrapped data key and leaves the ciphertext byte for byte identical.
+- Rotating a key leaves `updated_at` and `updated_by` on a parameter alone, since a rotation is not
+  an edit.
+- A rotation reaches tenants the caller cannot read, and the caller still cannot read them afterwards.
 
 ## Process protections
 
@@ -134,6 +140,22 @@ logging, and leases that would bound how long a granted read stays valid.
 
 Local root on the host is inside the boundary by design: `marsec operator` writes to the database
 directly, which is how the first credential comes into existence at all.
+
+## Rotation reaches further than the caller
+
+Every other authorization in this store is scoped to one tenant. Rotation is not: an identity granted
+`write` on `sys/rotate` in its own tenant rewraps every tenant's stored values.
+
+It never decrypts anything on the caller's behalf and returns no value, so the reach is to availability
+and to work done, not to confidentiality. `TestARotationReachesTenantsTheCallerCannotRead` holds both
+halves of that: the rotation moves another tenant's secret, and the same caller is still refused when
+it tries to read one.
+
+The capability is denied by default and has to be written into a policy deliberately. Treat granting
+it as granting a store-wide operator power, not a tenant one.
+
+What rotation does not address: every key encryption key version is derived from the same root key, so
+rotating limits the damage from a leaked derived key and does nothing about a compromised root.
 
 ## Reporting
 

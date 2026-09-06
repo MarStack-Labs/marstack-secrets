@@ -141,6 +141,56 @@ fails if the restored copy differs.
 
 ## Rotating a key encryption key
 
-Not yet possible. The derivation supports versions and `crypto.Rewrap` exists to move data keys onto a
-new key encryption key without touching payloads, but nothing raises the version yet. Recorded here
-so the gap is known rather than discovered during an incident.
+Rotation raises the key encryption key version and rewraps every stored data key onto it. Payloads are
+never re-encrypted, so the cost is one key unwrap per value rather than one re-encryption.
+
+Do this when a derived key encryption key may have escaped the process, for example through a core
+dump taken before hardening was in place, or on whatever schedule your policy requires.
+
+The store must be unsealed, and the caller needs `write` on `sys/rotate`.
+
+Read the current version first. The rotation refuses unless the request names it, so a replayed or
+accidental call cannot move the key:
+
+```sh
+curl -s "$MARSEC_ADDRESS/v1/sys/seal-status" | jq .kek_version
+```
+
+Then rotate, naming what you just read:
+
+```sh
+curl -s -X POST "$MARSEC_ADDRESS/v1/sys/rotate" \
+  -H "Authorization: Bearer $(cat ~/.marsec/token)" \
+  -d '{"current_version":1}'
+```
+
+The response reports what moved:
+
+```json
+{"from":1,"to":2,"subjects":[{"name":"secret","examined":812,"rewrapped":812},
+                             {"name":"param","examined":140,"rewrapped":140}]}
+```
+
+`examined` above `rewrapped` means some values were already on the current version, which is normal
+after a rotation that stopped partway.
+
+### What rotation does not do
+
+It does not rotate the root key. Every key encryption key is derived from the root, so a rotation
+limits the damage from a leaked *derived* key and does nothing about a compromised root. Replacing the
+root means re-splitting the Shamir shares, which this release cannot do.
+
+It reaches every tenant. Authorization is scoped to the caller's own tenant, but the walk is not:
+granting `sys/rotate` to one tenant's identity lets it rewrap every other tenant's values. It never
+reads them. Grant the capability accordingly.
+
+### If a rotation fails partway
+
+Nothing is lost and the store keeps serving. The version has already moved, new writes use it, and the
+values still on older versions remain readable because older key encryption keys stay derivable from
+the root.
+
+Read the version again and run the rotation once more. The second pass moves whatever the first left
+behind. It also raises the version again, which costs nothing but an integer.
+
+A rotation that returns `409 rotation_in_progress` means another one is already running. Wait for it.

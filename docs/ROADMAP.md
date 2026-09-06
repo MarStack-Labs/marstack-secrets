@@ -300,16 +300,17 @@ handoff, that is when to build it.
 
 ## What v1 does not have
 
-Written down so none of it is discovered during an incident.
+Written down so none of it is discovered during an incident. Key encryption key rotation was on this
+list and is no longer; see `docs/RUNBOOKS.md`.
 
-- Key encryption key rotation. The derivation supports versions and `Rewrap` exists, but nothing
-  raises the version.
 - Token binding enforcement. Recorded but not enforced; it needs mTLS, where the value is observed
   rather than claimed.
 - A liveness check against the control plane, so a destroyed instance cannot spend an assertion still
   inside its expiry window.
 - An audit anchor outside the host. The chain detects partial tampering, not a rewrite by whoever can
   write the whole file.
+- Root key rotation. The key encryption key can now be rotated, but every version of it is derived
+  from the same root. Replacing the root means re-splitting the Shamir shares.
 - Parameter versioning, and therefore parameter rollback.
 - High availability, disaster recovery replication, dynamic secrets, a PKI engine, transit encryption,
   and a web UI, all deferred beyond v1 from the start.

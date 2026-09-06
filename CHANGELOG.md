@@ -7,6 +7,39 @@ For a v1 release of a store that holds secrets, the entries worth reading are th
 *Deliberately absent*. Everything a version does not do is a thing an operator would otherwise find
 out during an incident.
 
+## [1.1.0] — 2026-09-06
+
+### Added
+
+- **Key encryption key rotation.** `POST /v1/sys/rotate` raises the version and rewraps every stored
+  secret version and parameter onto it. Only the wrapped data key is replaced; payloads are never
+  re-encrypted, so the cost is one key unwrap per value. The version now lives in the database rather
+  than in a compiled in constant, and `GET /v1/sys/seal-status` reports it.
+
+### Changed
+
+- The walk pages with a cursor instead of holding one transaction, because the database is opened with
+  a single connection and a long transaction would stop every other request until it finished.
+- Rotating a parameter's key leaves `updated_at` and `updated_by` alone. A rotation is not an edit.
+
+### Fixed
+
+- The `security` gate had been failing since the runbooks were added, unnoticed because that commit
+  was verified with the other targets run individually. The finding was the example host
+  `secrets.internal:8200` matching `generic-api-key`; the exemption is now recorded in
+  `.gitleaks.toml` and scoped to lines containing that host, so everything else in those files is
+  still scanned.
+
+### Known limits
+
+- A rotation is store wide while every authorization in this store is per tenant. An identity granted
+  `write` on `sys/rotate` rewraps other tenants' values without being able to read them. See
+  [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md).
+- The root key is not rotated. Every key encryption key version derives from it, so rotation limits a
+  leaked derived key and not a compromised root.
+- A rotation that fails partway leaves the store working and readable, but incompletely rotated. Run
+  it again; the next pass finishes the rest.
+
 ## [1.0.0] — 2026-08-25
 
 First release. The store is usable end to end: it boots sealed, authenticates workloads, serves
@@ -50,8 +83,6 @@ secrets and parameters behind policy, and records every access in a log it refus
 Each of these is a decision with a reason, not an oversight. The reasoning is in
 [docs/ROADMAP.md](docs/ROADMAP.md).
 
-- **Key encryption key rotation.** Derivation supports versions and `Rewrap` exists, but nothing raises
-  the version yet.
 - **Token binding enforcement.** Recorded but not enforced. A binding only means something if the
   server observes it rather than being told, so it waits for mTLS.
 - **A liveness check against the control plane.** A destroyed instance can still spend an assertion
@@ -75,4 +106,5 @@ Each of these is a decision with a reason, not an oversight. The reasoning is in
 - Auditing cannot be turned off. A full audit disk stops the store; see
   [docs/RUNBOOKS.md](docs/RUNBOOKS.md).
 
+[1.1.0]: https://github.com/MarStack-Labs/marstack-secrets/releases/tag/v1.1.0
 [1.0.0]: https://github.com/MarStack-Labs/marstack-secrets/releases/tag/v1.0.0

@@ -59,7 +59,7 @@ Reachable while sealed, because these are how a sealed store is diagnosed and op
 | Endpoint | Description |
 |---|---|
 | `GET /v1/sys/health` | Liveness probe. Returns `{"status":"ok"}` and nothing else |
-| `GET /v1/sys/seal-status` | Whether the store is uninitialized, sealed, or unsealed |
+| `GET /v1/sys/seal-status` | Whether the store is uninitialized, sealed, or unsealed, and which key encryption key version new writes use |
 | `POST /v1/sys/init` | Generates the root key and returns the unseal shares, once |
 | `POST /v1/sys/unseal` | Submits one share; the store opens on a quorum |
 | `GET /v1/sys/metrics` | Prometheus exposition. Unauthenticated, and carries no tenant or path label |
@@ -85,6 +85,7 @@ Everything below answers `503 sealed` until the store is open:
 | `PUT /v1/sys/leases/renew` | token | Extends one of the caller's leases |
 | `PUT /v1/sys/leases/revoke` | token | Drops one of the caller's leases |
 | `PUT /v1/sys/leases/revoke-prefix` | `delete` on the prefix | Revokes every holding under a prefix, and the holders' tokens |
+| `POST /v1/sys/rotate` | `write` on `sys/rotate` | Raises the key encryption key version and rewraps every stored value onto it |
 
 A path no module registered answers `404 not_found` whether or not it exists, so the route table stays
 private. A refusal never says why; ask `policies/check` about your own access instead.
@@ -219,7 +220,7 @@ error: audit: the chain does not verify: expected record 4 but found 5
 | [docs/AGENT.md](docs/AGENT.md) | The agent, and why it keeps no cache of its own |
 | [docs/RUNBOOKS.md](docs/RUNBOOKS.md) | A leaked secret, a compromised identity, a self-sealed store, a restore |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Milestones in dependency order, ending with what v1 lacks |
-| [docs/adr/](docs/adr/) | Five decision records: the monolith, the standard library, transport, SQLite, metrics |
+| [docs/adr/](docs/adr/) | Six decision records: the monolith, the standard library, transport, SQLite, metrics, rotation |
 
 ## Development
 

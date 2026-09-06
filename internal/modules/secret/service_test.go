@@ -16,6 +16,7 @@ type staticCipher struct {
 	kekVersion int
 	sealErr    error
 	openErr    error
+	rewrapErr  error
 }
 
 func (c *staticCipher) Seal(_ context.Context, _ string, plaintext []byte, aad crypto.AAD) (crypto.Envelope, error) {
@@ -34,6 +35,20 @@ func (c *staticCipher) Open(_ context.Context, _ string, envelope crypto.Envelop
 		return nil, err
 	}
 	return crypto.Sensitive(plaintext), nil
+}
+
+func (c *staticCipher) Rewrap(_ context.Context, _ string, envelope crypto.Envelope, aad crypto.AAD) (crypto.Envelope, bool, error) {
+	if c.rewrapErr != nil {
+		return crypto.Envelope{}, false, c.rewrapErr
+	}
+	if envelope.KEKVersion == c.kekVersion {
+		return envelope, false, nil
+	}
+	rewrapped, err := crypto.Rewrap(c.kek, c.kek, c.kekVersion, envelope, aad)
+	if err != nil {
+		return crypto.Envelope{}, false, err
+	}
+	return rewrapped, true, nil
 }
 
 func newTestService(t *testing.T) (*Service, *staticCipher, *sql.DB) {

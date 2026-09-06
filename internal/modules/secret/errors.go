@@ -12,6 +12,7 @@ var (
 	ErrInvalidVersion = errors.New("secret: version must not be negative")
 	ErrMaxVersions    = errors.New("secret: max versions must be greater than zero")
 	ErrNoSealer       = errors.New("secret: a sealer is required to write a version")
+	ErrNoRewrapper    = errors.New("secret: a rewrapper is required to move a version to another key")
 	ErrNoStore        = errors.New("secret: a store is required")
 	ErrNoCipher       = errors.New("secret: a cipher is required")
 )

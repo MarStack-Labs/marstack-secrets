@@ -14,6 +14,7 @@ rather than one at a time.
 | `MARSEC_SHUTDOWN_TIMEOUT` | `15s` | Grace period for in-flight requests on shutdown |
 | `MARSEC_ALLOW_INSECURE_HTTP` | `false` | Serve plaintext HTTP. Local development only |
 | `MARSEC_ALLOW_UNPROTECTED_MEMORY` | `false` | Start even when memory cannot be locked. Local development only |
+| `MARSEC_UI_ENABLED` | `false` | Serve the browser interface at `/ui/`. Decrypts values into browsers |
 | `MARSEC_CONTROL_PLANE_ISSUER` | none | Issuer expected in instance assertions. Enables instance login |
 | `MARSEC_CONTROL_PLANE_JWKS_FILE` | none | Path to the control plane Ed25519 key set. Enables instance login |
 | `MARSEC_CONTROL_PLANE_AUDIENCE` | `marstack-secrets` | Audience this store accepts in assertions |
@@ -57,6 +58,10 @@ variable unset.
   Setting one without the other is an error rather than a partly enabled login. Setting neither leaves
   `POST /v1/auth/instance/login` unrouted, so an unconfigured store answers `404` instead of
   advertising a login it cannot perform.
+- `MARSEC_UI_ENABLED` is off by default and separate from every other switch. The browser interface
+  renders decrypted values on a screen and keeps a session token in a tab, which is a different risk
+  from serving plaintext HTTP, and accepting one should never quietly accept the other. Enabling it
+  logs a warning on every boot.
 - Values are trimmed, and a value that is only whitespace counts as unset.
 - There is no variable that turns auditing off. It defaults to a path inside the data directory so it
   is always writable, and a failure to record is a failure to serve.

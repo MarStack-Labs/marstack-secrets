@@ -312,13 +312,14 @@ list and is no longer; see `docs/RUNBOOKS.md`.
 - Root key rotation. The key encryption key can now be rotated, but every version of it is derived
   from the same root. Replacing the root means re-splitting the Shamir shares.
 - Parameter versioning, and therefore parameter rollback.
-- High availability, disaster recovery replication, dynamic secrets, a PKI engine, transit encryption,
-  and a web UI, all deferred beyond v1 from the start.
+- High availability, disaster recovery replication, dynamic secrets, a PKI engine, and transit
+  encryption, all deferred beyond v1 from the start. The web interface was on this list and is no
+  longer; it is off by default and its trade is recorded in `docs/adr/0007`.
 
 ## Deferred beyond v1
 
-High availability and Raft, disaster recovery replication, dynamic secrets, a PKI engine, transit
-encryption, and a web UI.
+High availability and Raft, disaster recovery replication, dynamic secrets, a PKI engine, and transit
+encryption.
 
 Auto-unseal is a prerequisite for high availability, not an optional extra: every new node boots
 sealed, so failover without auto-unseal still waits for a human to type Shamir shares.

@@ -115,6 +115,7 @@
       identity = self;
       el("session-who").textContent = self.identity + " @ " + self.tenant;
       show("sign-out", true);
+      show("login-panel", false);
       if (expires) {
         toast("signed in until " + expires);
       }
@@ -132,6 +133,7 @@
       forgetValue();
       el("session-who").textContent = "not signed in";
       show("sign-out", false);
+      show("login-panel", true);
       refreshSeal();
       toast("signed out");
     });

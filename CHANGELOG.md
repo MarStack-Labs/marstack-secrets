@@ -7,6 +7,30 @@ For a v1 release of a store that holds secrets, the entries worth reading are th
 *Deliberately absent*. Everything a version does not do is a thing an operator would otherwise find
 out during an incident.
 
+## [1.2.0] — 2026-09-06
+
+### Added
+
+- **A browser interface at `/ui/`**, off unless `MARSEC_UI_ENABLED` is set, and warning on every boot
+  when it is on. It reads and writes secrets and parameters, unseals, lists leases, explains a policy
+  decision, and rotates. Three embedded files, no framework, no build step, so the binary stays one
+  file.
+
+### Changed
+
+- `marsec status` and the client's `SealStatus` report the key encryption key version. The rotation
+  work added it to the API and left the client behind, so the one command the runbook tells an
+  operator to run before rotating did not show the number it asks for.
+
+### Known limits
+
+- The interface renders decrypted values onto a screen, which no control in this process can protect.
+  Cross site scripting is now a threat where it was not; a strict content security policy is the
+  mitigation, held shut by tests rather than assumed. See
+  [docs/adr/0007](docs/adr/0007-a-browser-interface-that-is-off-by-default.md).
+- The session token lives in a JavaScript variable, so reloading the page signs you out. That is the
+  intended cost of keeping it out of browser storage.
+
 ## [1.1.0] — 2026-09-06
 
 ### Added
@@ -106,5 +130,6 @@ Each of these is a decision with a reason, not an oversight. The reasoning is in
 - Auditing cannot be turned off. A full audit disk stops the store; see
   [docs/RUNBOOKS.md](docs/RUNBOOKS.md).
 
+[1.2.0]: https://github.com/MarStack-Labs/marstack-secrets/releases/tag/v1.2.0
 [1.1.0]: https://github.com/MarStack-Labs/marstack-secrets/releases/tag/v1.1.0
 [1.0.0]: https://github.com/MarStack-Labs/marstack-secrets/releases/tag/v1.0.0

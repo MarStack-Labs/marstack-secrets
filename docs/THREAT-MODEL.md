@@ -91,6 +91,10 @@ requests cannot be verified while Actions are off.
 - Rotating a key leaves `updated_at` and `updated_by` on a parameter alone, since a rotation is not
   an edit.
 - A rotation reaches tenants the caller cannot read, and the caller still cannot read them afterwards.
+- The browser interface is absent from the routing table until it is enabled.
+- Its policy refuses inline and remote script, and the page carries neither.
+- Its script never mentions browser storage, cookies, or any function that turns a value into markup.
+- Enabling it changes nothing about what an identity is permitted to read.
 
 ## Process protections
 
@@ -140,6 +144,27 @@ logging, and leases that would bound how long a granted read stays valid.
 
 Local root on the host is inside the boundary by design: `marsec operator` writes to the database
 directly, which is how the first credential comes into existence at all.
+
+## The browser interface, when it is on
+
+`MARSEC_UI_ENABLED` is off by default. When it is on, the store gains a channel it otherwise does not
+have, and the trade is recorded in [adr/0007](adr/0007-a-browser-interface-that-is-off-by-default.md).
+
+| Control | Effect |
+|---|---|
+| Off by default, warning on every boot | The channel cannot open by omission |
+| `default-src 'none'`, `script-src 'self'`, no `unsafe-inline` | Injected or remote script does not execute |
+| No framework and no build step | There is no inline script to excuse, so the policy needs no relaxation |
+| Session token in a variable only | A stolen browser profile carries no token; a reload signs the operator out |
+| Values masked until revealed | A value reaches the screen only when asked for |
+| The module serves files and registers no API route | The interface grants nothing the caller's policy does not already grant |
+
+What it does not address, because nothing in this process can:
+
+- A value on a screen can be photographed, recorded, or read over a shoulder.
+- The clipboard is outside the boundary. Anything on the machine can read it.
+- Cross site scripting is a threat where it previously was not. The policy is a mitigation, not an
+  absence, and the tests hold it shut rather than proving it airtight.
 
 ## Rotation reaches further than the caller
 

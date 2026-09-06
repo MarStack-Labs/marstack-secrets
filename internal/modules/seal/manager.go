@@ -288,7 +288,11 @@ func (m *Manager) deriveKEKLocked(tenant string, version int) (crypto.Key, error
 	if version < initialKEKVersion {
 		return nil, ErrKEKVersion
 	}
-	return crypto.DeriveKey(m.root, crypto.Label("kek", tenant, crypto.LabelInt(version)))
+	label, err := crypto.Label("kek", tenant, crypto.LabelInt(version))
+	if err != nil {
+		return nil, err
+	}
+	return crypto.DeriveKey(m.root, label)
 }
 
 func (m *Manager) statusLocked(stored config) Status {

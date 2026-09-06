@@ -20,8 +20,6 @@ const (
 	tokenDirPerm   = 0o700
 )
 
-var errUsage = errors.New("usage")
-
 type connection struct {
 	address    string
 	caCertFile string

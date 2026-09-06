@@ -3,16 +3,11 @@ package httpx
 import (
 	"bytes"
 	"encoding/json"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
-
-func discardLogger() *slog.Logger {
-	return slog.New(slog.NewJSONHandler(io.Discard, nil))
-}
 
 func TestChainAppliesMiddlewareOutermostFirst(t *testing.T) {
 	var order []string

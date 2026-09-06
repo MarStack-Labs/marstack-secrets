@@ -199,11 +199,7 @@ func (m *Module) handleRevokePrefix(w http.ResponseWriter, r *http.Request) {
 		"identities", revocation.Identities,
 		"tokens", revocation.Tokens)
 
-	httpx.JSON(w, http.StatusOK, revocationResponse{
-		Leases:     revocation.Leases,
-		Identities: revocation.Identities,
-		Tokens:     revocation.Tokens,
-	})
+	httpx.JSON(w, http.StatusOK, revocationResponse(revocation))
 }
 
 func (m *Module) refuse(w http.ResponseWriter, r *http.Request, err error) {

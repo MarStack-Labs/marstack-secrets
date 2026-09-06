@@ -14,6 +14,7 @@ const keyCheckLabel = "marstack-secrets/key-check/v1"
 var (
 	ErrEmptyLabel = errors.New("crypto: derivation label must not be empty")
 	ErrKeyCheck   = errors.New("crypto: key check value does not match")
+	ErrLabelPart  = errors.New("crypto: a label part exceeds the encodable length")
 )
 
 func DeriveKey(root Key, label string) (Key, error) {
@@ -30,13 +31,16 @@ func DeriveKey(root Key, label string) (Key, error) {
 	return Key(derived), nil
 }
 
-func Label(parts ...string) string {
+func Label(parts ...string) (string, error) {
 	encoded := make([]byte, 0, 32)
 	for _, part := range parts {
+		if len(part) > maxFieldLen {
+			return "", ErrLabelPart
+		}
 		encoded = binary.BigEndian.AppendUint32(encoded, uint32(len(part)))
 		encoded = append(encoded, part...)
 	}
-	return string(encoded)
+	return string(encoded), nil
 }
 
 func LabelInt(value int) string {

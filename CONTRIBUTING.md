@@ -9,13 +9,14 @@ Security problems do not go in issues. See [SECURITY.md](SECURITY.md).
 ```sh
 git clone git@github.com:MarStack-Labs/marstack-secrets.git
 cd marstack-secrets
+make tools
 make hooks
 make check
 ```
 
-`make hooks` installs a pre-commit hook that runs `make check`. GitHub Actions is disabled on this
-repository to keep runner usage at zero, so that hook is where the gates actually run. Skipping it
-means nothing is checked until someone else notices.
+`make tools` installs the scanners. `make hooks` points `core.hooksPath` at the tracked
+`.githooks/pre-commit`, so the hook is reviewed like any other file rather than living untracked in
+`.git/`.
 
 `make check` needs `gitleaks` on `PATH`. On macOS it also needs `MARSEC_ALLOW_UNPROTECTED_MEMORY=true`
 to run the server, because the process protections are Linux-only; `make vm-up` gives you a Linux VM
@@ -30,7 +31,21 @@ where they work.
 | `make arch-check` | A module imports another module, or the server imports its own client |
 | `make test-race` | Any test fails, including under the race detector |
 | `make drill` | A snapshot cannot be saved, verified and restored |
-| `make security` | `govulncheck` or `gitleaks` finds something |
+| `make security` | `govulncheck`, `staticcheck`, `gosec` or `gitleaks` finds something |
+
+### What gosec is not asked about
+
+`make gosec` excludes five rules. Each is excluded because the pattern it flags is either already
+guarded or deliberate, and the `Makefile` cannot say so itself since this repository allows no
+comments.
+
+| Rule | Why |
+|---|---|
+| `G115` | Integer conversion in a length prefix. `AAD.encode` and `Label` refuse a part above `maxFieldLen` before converting. `Record.chain` is not bounded but is unreachable: every field it hashes is bounded by validation or by the HTTP server's header limit. Widening that prefix would change every digest and make every existing audit record unverifiable, which is the failure the log exists to prevent |
+| `G202` | The snapshot path is interpolated into `VACUUM INTO`, which takes no parameter. A path containing a quote is refused with `ErrSnapshotQuoted` before the statement is built |
+| `G204` | The agent runs the reload command from its own configuration file. Running an operator-chosen command is the feature |
+| `G304` | Paths for the audit log, snapshots, the agent configuration and the token file come from the operator. Opening a file the operator named is the feature |
+| `G404` | `math/rand/v2` is used for sweep and retry jitter, never for anything a decision rests on |
 
 ## House rules
 

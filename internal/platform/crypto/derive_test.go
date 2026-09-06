@@ -3,6 +3,7 @@ package crypto
 import (
 	"bytes"
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -71,12 +72,31 @@ func TestDeriveKeyRejectsInvalidInput(t *testing.T) {
 	}
 }
 
+func label(t *testing.T, parts ...string) string {
+	t.Helper()
+
+	made, err := Label(parts...)
+	if err != nil {
+		t.Fatalf("Label(%q) returned error: %v", parts, err)
+	}
+	return made
+}
+
 func TestLabelIsUnambiguous(t *testing.T) {
-	if Label("a", "bc") == Label("ab", "c") {
+	if label(t, "a", "bc") == label(t, "ab", "c") {
 		t.Fatal("differently split parts produced the same label")
 	}
-	if Label("kek", "prod", LabelInt(1)) == Label("kek", "prod", LabelInt(11)) {
+	if label(t, "kek", "prod", LabelInt(1)) == label(t, "kek", "prod", LabelInt(11)) {
 		t.Fatal("different versions produced the same label")
+	}
+}
+
+func TestLabelRefusesAPartItCannotPrefixHonestly(t *testing.T) {
+	if _, err := Label("kek", strings.Repeat("x", maxFieldLen+1)); !errors.Is(err, ErrLabelPart) {
+		t.Fatalf("Label with an over long part = %v, want ErrLabelPart", err)
+	}
+	if _, err := Label("kek", strings.Repeat("x", maxFieldLen)); err != nil {
+		t.Fatalf("Label at the limit returned error: %v", err)
 	}
 }
 

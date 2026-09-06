@@ -7,7 +7,7 @@ For a v1 release of a store that holds secrets, the entries worth reading are th
 *Deliberately absent*. Everything a version does not do is a thing an operator would otherwise find
 out during an incident.
 
-## [Unreleased]
+## [1.2.1] — 2026-09-06
 
 ### Changed
 
@@ -157,6 +157,7 @@ Each of these is a decision with a reason, not an oversight. The reasoning is in
 - Auditing cannot be turned off. A full audit disk stops the store; see
   [docs/RUNBOOKS.md](docs/RUNBOOKS.md).
 
+[1.2.1]: https://github.com/MarStack-Labs/marstack-secrets/releases/tag/v1.2.1
 [1.2.0]: https://github.com/MarStack-Labs/marstack-secrets/releases/tag/v1.2.0
 [1.1.0]: https://github.com/MarStack-Labs/marstack-secrets/releases/tag/v1.1.0
 [1.0.0]: https://github.com/MarStack-Labs/marstack-secrets/releases/tag/v1.0.0

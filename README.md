@@ -17,7 +17,7 @@ lifetime, and cannot read anything the store failed to write a record for.
 
 ## Status
 
-v1.2.0. One direct dependency, and every gate the hook runs is the gate CI runs.
+v1.2.1. One direct dependency, and every gate the hook runs is the gate CI runs.
 
 The server starts sealed, is initialized and unsealed with Shamir shares, authenticates workloads
 against bootstrap tokens or control plane assertions, serves secrets and parameters behind policy,

@@ -18,6 +18,9 @@ make check
 `.githooks/pre-commit`, so the hook is reviewed like any other file rather than living untracked in
 `.git/`.
 
+GitHub Actions runs the same targets on every push and pull request, so the hook and CI cannot
+disagree about what passing means.
+
 `make check` needs `gitleaks` on `PATH`. On macOS it also needs `MARSEC_ALLOW_UNPROTECTED_MEMORY=true`
 to run the server, because the process protections are Linux-only; `make vm-up` gives you a Linux VM
 where they work.

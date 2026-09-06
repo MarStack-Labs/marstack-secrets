@@ -4,9 +4,14 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -22,6 +27,7 @@ jobs:
       - run: make arch-check
       - run: make test-race
       - run: make build
+      - run: make drill
 
   security:
     runs-on: ubuntu-latest
@@ -33,7 +39,17 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
       - run: make govulncheck
+
+      - name: install the scanners
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+
+      - run: make staticcheck
+      - run: make gosec
+
       - name: install gitleaks
         env:
           GITLEAKS_VERSION: 8.30.1
@@ -43,3 +59,17 @@ jobs:
           sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
           rm -f gitleaks gitleaks.tar.gz
       - run: make gitleaks
+
+  codeql:
+    if: github.event.repository.visibility == 'public'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: go
+          queries: security-extended
+      - uses: github/codeql-action/analyze@v4

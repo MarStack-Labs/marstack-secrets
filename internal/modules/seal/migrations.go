@@ -17,4 +17,10 @@ var migrations = []sqlite.Migration{
 			);
 		`,
 	},
+	{
+		Name: "0002_kek_version",
+		SQL: `
+			ALTER TABLE seal_config ADD COLUMN kek_version INTEGER NOT NULL DEFAULT 1;
+		`,
+	},
 }

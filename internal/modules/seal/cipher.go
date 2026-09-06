@@ -11,13 +11,13 @@ type Cipher struct {
 }
 
 func (c *Cipher) Seal(_ context.Context, tenant string, plaintext []byte, aad crypto.AAD) (crypto.Envelope, error) {
-	kek, err := c.manager.deriveKEK(tenant, currentKEKVersion)
+	kek, version, err := c.manager.sealingKEK(tenant)
 	if err != nil {
 		return crypto.Envelope{}, err
 	}
 	defer kek.Zero()
 
-	return crypto.Seal(kek, currentKEKVersion, plaintext, aad)
+	return crypto.Seal(kek, version, plaintext, aad)
 }
 
 func (c *Cipher) Open(_ context.Context, tenant string, envelope crypto.Envelope, aad crypto.AAD) (crypto.Sensitive, error) {

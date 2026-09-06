@@ -283,7 +283,7 @@ func TestInitializeStoresNoKeyMaterial(t *testing.T) {
 	manager, shares, path := initialized(t)
 	ctx := context.Background()
 
-	kek, err := manager.deriveKEK("prod", currentKEKVersion)
+	kek, err := manager.deriveKEK("prod", initialKEKVersion)
 	if err != nil {
 		t.Fatalf("deriveKEK returned error: %v", err)
 	}

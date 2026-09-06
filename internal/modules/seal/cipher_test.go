@@ -23,8 +23,8 @@ func TestCipherRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Seal returned error: %v", err)
 	}
-	if envelope.KEKVersion != currentKEKVersion {
-		t.Errorf("KEKVersion = %d, want %d", envelope.KEKVersion, currentKEKVersion)
+	if envelope.KEKVersion != initialKEKVersion {
+		t.Errorf("KEKVersion = %d, want %d", envelope.KEKVersion, initialKEKVersion)
 	}
 	if bytes.Contains(envelope.Ciphertext, plaintext) {
 		t.Fatal("the plaintext appears in the ciphertext")

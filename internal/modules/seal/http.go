@@ -24,10 +24,11 @@ type Module struct {
 }
 
 type statusResponse struct {
-	State     string `json:"state"`
-	Shares    int    `json:"shares"`
-	Threshold int    `json:"threshold"`
-	Progress  int    `json:"progress"`
+	State      string `json:"state"`
+	Shares     int    `json:"shares"`
+	Threshold  int    `json:"threshold"`
+	Progress   int    `json:"progress"`
+	KEKVersion int    `json:"kek_version"`
 }
 
 type initRequest struct {
@@ -173,9 +174,10 @@ func classify(err error) (int, string) {
 
 func render(status Status) statusResponse {
 	return statusResponse{
-		State:     string(status.State),
-		Shares:    status.Shares,
-		Threshold: status.Threshold,
-		Progress:  status.Progress,
+		State:      string(status.State),
+		Shares:     status.Shares,
+		Threshold:  status.Threshold,
+		Progress:   status.Progress,
+		KEKVersion: status.KEKVersion,
 	}
 }

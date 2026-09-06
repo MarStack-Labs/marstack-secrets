@@ -240,14 +240,14 @@ func TestParamGetReportsProvenanceWhenAsked(t *testing.T) {
 
 func TestStatusNeedsNoToken(t *testing.T) {
 	newStub(t, func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"state":"sealed","shares":5,"threshold":3,"progress":1}`))
+		_, _ = w.Write([]byte(`{"state":"sealed","shares":5,"threshold":3,"progress":1,"kek_version":4}`))
 	})
 
 	var out bytes.Buffer
 	if err := runStatus(t.Context(), &out, nil); err != nil {
 		t.Fatalf("runStatus returned error: %v", err)
 	}
-	for _, expected := range []string{"state     sealed", "threshold 3", "progress  1"} {
+	for _, expected := range []string{"state       sealed", "threshold   3", "progress    1", "kek version 4"} {
 		if !strings.Contains(out.String(), expected) {
 			t.Errorf("output is missing %q:\n%s", expected, out.String())
 		}

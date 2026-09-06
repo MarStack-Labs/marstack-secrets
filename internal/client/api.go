@@ -33,10 +33,11 @@ type Parameter struct {
 }
 
 type SealStatus struct {
-	State     string `json:"state"`
-	Shares    int    `json:"shares"`
-	Threshold int    `json:"threshold"`
-	Progress  int    `json:"progress"`
+	State      string `json:"state"`
+	Shares     int    `json:"shares"`
+	Threshold  int    `json:"threshold"`
+	Progress   int    `json:"progress"`
+	KEKVersion int    `json:"kek_version"`
 }
 
 type sessionBody struct {

@@ -377,8 +377,8 @@ func runStatus(ctx context.Context, out io.Writer, args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "state     %s\nshares    %d\nthreshold %d\nprogress  %d\n",
-		status.State, status.Shares, status.Threshold, status.Progress)
+	fmt.Fprintf(out, "state       %s\nshares      %d\nthreshold   %d\nprogress    %d\nkek version %d\n",
+		status.State, status.Shares, status.Threshold, status.Progress, status.KEKVersion)
 	return nil
 }
 

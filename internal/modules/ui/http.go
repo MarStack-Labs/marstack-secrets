@@ -8,6 +8,7 @@ import (
 
 const (
 	pathIndex  = "/ui/"
+	pathTheme  = "/ui/meridian.css"
 	pathStyles = "/ui/app.css"
 	pathScript = "/ui/app.js"
 )
@@ -29,18 +30,20 @@ type asset struct {
 
 var served = map[string]asset{
 	pathIndex:  {file: "assets/index.html", contentType: "text/html; charset=utf-8"},
+	pathTheme:  {file: "assets/meridian.css", contentType: "text/css; charset=utf-8"},
 	pathStyles: {file: "assets/app.css", contentType: "text/css; charset=utf-8"},
 	pathScript: {file: "assets/app.js", contentType: "text/javascript; charset=utf-8"},
 }
 
 func (m *Module) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET "+pathIndex, m.serve)
+	mux.HandleFunc("GET "+pathTheme, m.serve)
 	mux.HandleFunc("GET "+pathStyles, m.serve)
 	mux.HandleFunc("GET "+pathScript, m.serve)
 }
 
 func (m *Module) PathsAllowedWhileSealed() []string {
-	return []string{pathIndex, pathStyles, pathScript}
+	return []string{pathIndex, pathTheme, pathStyles, pathScript}
 }
 
 func (m *Module) serve(w http.ResponseWriter, r *http.Request) {

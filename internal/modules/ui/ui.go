@@ -10,7 +10,7 @@ const moduleName = "ui"
 
 var ErrNoLogger = errors.New("ui: a logger is required")
 
-//go:embed assets/index.html assets/app.css assets/app.js
+//go:embed assets/index.html assets/meridian.css assets/app.css assets/app.js
 var assets embed.FS
 
 type Options struct {

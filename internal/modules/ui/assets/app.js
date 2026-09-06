@@ -88,6 +88,16 @@
     return "/v1/param/data/" + encodeURIComponent(tenant) + "/" + parts.join("/");
   }
 
+  function pillFor(state) {
+    if (state === "unsealed") {
+      return "ms-pill-ok";
+    }
+    if (state === "sealed") {
+      return "ms-pill-warn";
+    }
+    return "ms-pill-danger";
+  }
+
   function refreshSeal() {
     return call("GET", "/v1/sys/seal-status").then(function (status) {
       sealVersion = status.kek_version;
@@ -99,7 +109,7 @@
 
       var banner = el("seal-banner");
       banner.textContent = status.state;
-      banner.className = "banner " + status.state;
+      banner.className = "ms-pill " + pillFor(status.state);
 
       show("init-panel", status.state === "uninitialized");
       show("unseal-panel", status.state === "sealed");

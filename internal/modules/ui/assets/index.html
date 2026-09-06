@@ -1,17 +1,18 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-surface="navy">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>marstack-secrets</title>
+<link rel="stylesheet" href="/ui/meridian.css">
 <link rel="stylesheet" href="/ui/app.css">
 </head>
-<body>
+<body class="ms-root">
 
 <header>
   <h1>marstack-secrets</h1>
-  <div id="seal-banner" class="banner">checking the store</div>
+  <span id="seal-banner" class="ms-pill ms-pill-idle">checking the store</span>
   <div id="session" class="session">
     <span id="session-who">not signed in</span>
     <button id="sign-out" type="button" hidden>sign out</button>

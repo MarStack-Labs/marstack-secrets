@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en" data-surface="navy">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>marstack-secrets — a secret and parameter store that boots sealed</title>
+<meta name="description" content="A secret and parameter store with envelope encryption, Shamir unsealing, default-deny policy, leases, and an append-only audit log it refuses to run without.">
+<link rel="stylesheet" href="meridian.css">
+<link rel="stylesheet" href="site.css">
+</head>
+<body class="ms-root">
+
+<nav class="top">
+  <b class="ms-wordmark">marstack</b>
+  <span class="ms-eyebrow">secrets</span>
+  <span class="grow"></span>
+  <a href="#quickstart">Quickstart</a>
+  <a href="#rotation">Rotation</a>
+  <a href="#console">Console</a>
+  <a href="https://github.com/MarStack-Labs/marstack-secrets">GitHub</a>
+</nav>
+
+<header class="hero">
+  <span class="ms-pill ms-pill-ok"><i></i>v1.2.0</span>
+  <h1>The database alone is useless.</h1>
+  <p class="lede">
+    A secret and parameter store that boots sealed. The root key exists only in locked memory,
+    split across share holders. Every value is sealed under its own data key, bound to the tenant,
+    path and version it belongs to, and every access is recorded in a log the store refuses to run
+    without.
+  </p>
+
+  <div class="cards">
+    <div class="card">
+      <b>Boots sealed</b>
+      <span>A restart is an outage until a quorum of share holders is available. That is the design.</span>
+    </div>
+    <div class="card">
+      <b>Bound ciphertext</b>
+      <span>Move a value to another tenant, path or version and it stops decrypting.</span>
+    </div>
+    <div class="card">
+      <b>Auditing cannot be turned off</b>
+      <span>A record that cannot be written refuses the request. A failing sink seals the store.</span>
+    </div>
+    <div class="card">
+      <b>One dependency</b>
+      <span>A cgo-free SQLite driver. Everything else is the standard library.</span>
+    </div>
+  </div>
+</header>
+
+<div class="page">
+  <aside class="toc">
+    <ol>
+      <li><a href="#what">What it is</a></li>
+      <li><a href="#install">Install</a></li>
+      <li><a href="#quickstart">First run</a></li>
+      <li><a href="#identities">Identities and policy</a></li>
+      <li><a href="#secrets">Secrets</a></li>
+      <li><a href="#params">Parameters</a></li>
+      <li><a href="#leases">Leases</a></li>
+      <li><a href="#rotation">Rotation</a></li>
+      <li><a href="#console">The console</a></li>
+      <li><a href="#audit">The audit log</a></li>
+      <li><a href="#agent">The agent</a></li>
+      <li><a href="#production">Before production</a></li>
+      <li><a href="#excluded">What it will not do</a></li>
+    </ol>
+  </aside>
+
+  <main class="body">
+
+    <section id="what">
+      <h2>What it is</h2>
+      <p>
+        One binary, <code>marsec</code>, holding two things an application needs and should never
+        carry in its image: secrets, which are encrypted and versioned, and parameters, which are
+        typed configuration that inherits towards the tenant root.
+      </p>
+      <p>
+        The architecture is a modular monolith. A secret store is a single consistency domain, so
+        splitting it into services would buy nothing and cost a distributed transaction. Modules do
+        not import each other; the boundary is enforced by a script that runs on every commit.
+      </p>
+      <div class="note" data-tone="info">
+        <p>
+          <strong>Linux only.</strong> macOS is a development platform. Memory locking, disabled core
+          dumps and an undumpable process have no equivalent there, and the store refuses to start
+          without them unless explicitly told otherwise.
+        </p>
+      </div>
+    </section>
+
+    <section id="install">
+      <h2>Install</h2>
+      <p>Download an archive from the releases page, or build from source:</p>
+      <pre><code>git clone https://github.com/MarStack-Labs/marstack-secrets.git
+cd marstack-secrets
+make build</code></pre>
+      <p>Requires Go 1.26.6 or newer. Earlier 1.26 patch releases carry standard library
+      vulnerabilities reachable from the TLS listener.</p>
+    </section>
+
+    <section id="quickstart">
+      <h2>First run</h2>
+      <p>The store starts sealed and unable to decrypt anything. Initialise it once:</p>
+      <pre><code>curl -s -X POST https://secrets.internal:8200/v1/sys/init \
+  -d '{"shares":5,"threshold":3}'</code></pre>
+      <div class="note" data-tone="danger">
+        <p>
+          <strong>The shares are returned once.</strong> They are not stored, not recoverable, and not
+          shown again. Distribute them before you close the terminal.
+        </p>
+      </div>
+      <p>Then, from each share holder in turn, until a quorum is reached:</p>
+      <pre><code>curl -s -X POST https://secrets.internal:8200/v1/sys/unseal \
+  -d '{"share":"&lt;share&gt;"}'</code></pre>
+      <p>
+        A wrong quorum discards every collected share and starts again from zero, so a mistake costs
+        a round rather than corrupting anything.
+      </p>
+    </section>
+
+    <section id="identities">
+      <h2>Identities and policy</h2>
+      <p>
+        The first credential comes from the host, not from the network. <code>marsec operator</code>
+        writes to the database directly and does not need the store to be unsealed.
+      </p>
+      <pre><code>marsec operator identity add service/ci --tenant prod
+marsec operator policy put app --tenant prod --rules rules.json
+marsec operator policy bind service/ci --tenant prod --policy app
+marsec operator bootstrap service/ci --ttl 10m</code></pre>
+      <p>
+        The bootstrap token is single use. Trading it for a session token consumes it in the same
+        statement that reads it, so two racing clients cannot both win.
+      </p>
+      <p>
+        Policy is default deny. An explicit denial wins outright; otherwise the most specific matching
+        rule decides alone, so the order rules are written in has no effect. Tenant isolation is
+        checked before any policy is loaded.
+      </p>
+      <pre><code>POST /v1/sys/policies/check</code></pre>
+      <p>explains a decision to the caller it concerns, naming the policy and the rule that decided.</p>
+    </section>
+
+    <section id="secrets">
+      <h2>Secrets</h2>
+      <p>
+        Versioned, with check-and-set, reversible delete, and irreversible destroy. Authorization runs
+        before storage is touched, so a refusal is identical whether the path exists or not.
+      </p>
+      <pre><code>printf 'db_password=s3cr3t' | marsec secret put prod/payment-api
+marsec secret get prod/payment-api</code></pre>
+      <p>
+        Every value is sealed under a fresh data key, which is wrapped by a key encryption key derived
+        from the root. The associated data binds the ciphertext to its tenant, path and version, so a
+        row copied to another location fails to decrypt rather than revealing anything.
+      </p>
+      <div class="note" data-tone="warn">
+        <p>
+          <code>--value</code> exists and warns about itself. A value on the command line is visible in
+          <code>ps</code> and in shell history. Prefer standard input.
+        </p>
+      </div>
+    </section>
+
+    <section id="params">
+      <h2>Parameters</h2>
+      <p>
+        Typed configuration, validated on write, resolving upwards towards the tenant root. Asking for
+        <code>apps/payment/log_level</code> falls back to <code>apps/log_level</code> and then
+        <code>log_level</code>, and never leaves the tenant.
+      </p>
+      <pre><code>marsec param put prod/app/log_level --kind string --value info
+marsec param get prod/apps/payment/log_level --verbose</code></pre>
+      <p>
+        A parameter can refer to a secret. The reference is authorized separately, on the secret's own
+        path, and is never resolved recursively.
+      </p>
+    </section>
+
+    <section id="leases">
+      <h2>Leases</h2>
+      <p>
+        Every read records who holds which version until when. That record is what makes revocation
+        possible: revoking a prefix or an identity takes the holders' session tokens with it.
+      </p>
+      <pre><code>curl -s -X PUT https://secrets.internal:8200/v1/sys/leases/revoke-prefix \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"prefix":"secret/prod/payment"}'</code></pre>
+      <p>
+        A lease is reused per identity, path and version, enforced by a partial unique index, so a
+        read loop cannot grow the table without bound.
+      </p>
+    </section>
+
+    <section id="rotation">
+      <h2>Rotation</h2>
+      <p>
+        Rotating raises the key encryption key version and rewraps every stored data key onto it. The
+        payload is never re-encrypted, so the cost is one key unwrap per value rather than one
+        re-encryption.
+      </p>
+      <pre><code>curl -s https://secrets.internal:8200/v1/sys/seal-status | jq .kek_version
+curl -s -X POST https://secrets.internal:8200/v1/sys/rotate \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"current_version":1}'</code></pre>
+      <p>
+        The request must name the version it believes is current. A mismatch is a conflict and nothing
+        moves, so a replayed or accidental call cannot rotate anything.
+      </p>
+      <div class="note" data-tone="warn">
+        <p>
+          <strong>Rotation reaches every tenant.</strong> Every other authorization here is scoped to
+          one tenant; this one is not. An identity granted <code>write</code> on
+          <code>sys/rotate</code> rewraps values it cannot read. It never decrypts them, and a test
+          holds both halves of that, but grant the capability as an operator power rather than a
+          tenant one.
+        </p>
+        <p>
+          It also does not rotate the root key. Every key encryption key version derives from the same
+          root, so rotating limits a leaked derived key and does nothing about a compromised root.
+        </p>
+      </div>
+    </section>
+
+    <section id="console">
+      <h2>The console</h2>
+      <p>
+        A browser interface at <code>/ui/</code> that unseals, reads and writes secrets and parameters,
+        lists leases, explains a policy decision, and rotates. It is off unless asked for:
+      </p>
+      <pre><code>MARSEC_UI_ENABLED=true marsec server</code></pre>
+      <p>
+        It serves three files and registers no API route, so it grants nothing of its own. The browser
+        calls the same endpoints with your own token through the same policy checks, and an identity
+        with no policy is refused there exactly as it is refused by <code>curl</code>.
+      </p>
+      <p>
+        There is no framework and no build step, which keeps the binary one file and lets the content
+        security policy be <code>default-src 'none'</code> with no <code>unsafe-inline</code> anywhere.
+        The session token lives in a JavaScript variable and nowhere else, so reloading the page signs
+        you out.
+      </p>
+      <div class="note" data-tone="warn">
+        <p>
+          A value on a screen can be photographed, and the clipboard is outside the process boundary.
+          Enabling the console opens a channel this store otherwise does not have; the trade is
+          recorded rather than absorbed.
+        </p>
+      </div>
+    </section>
+
+    <section id="audit">
+      <h2>The audit log</h2>
+      <p>
+        Append-only, hash chained, <code>fsync</code>ed before the response returns, and carrying no
+        value. A record that cannot be written refuses the request, and a failing sink seals the store.
+      </p>
+      <pre><code>marsec operator audit verify</code></pre>
+      <div class="note" data-tone="info">
+        <p>
+          The chain detects a record that was edited, removed or reordered. It does not detect a
+          rewrite of the whole file by whoever can write it, because the chain is recomputed from the
+          same data. There is a test that proves this rather than a claim that implies otherwise.
+        </p>
+      </div>
+    </section>
+
+    <section id="agent">
+      <h2>The agent</h2>
+      <p>
+        Renders secrets into files an unmodified application already reads, and runs a reload command
+        when they change.
+      </p>
+      <pre><code>marsec agent --config /etc/marstack-secrets/agent.json</code></pre>
+      <p>
+        The rendered file is written atomically, and it is the only cache. A second copy of a secret on
+        disk would double the exposure to halve an inconvenience, so there is no separate cache to
+        leak.
+      </p>
+    </section>
+
+    <section id="production">
+      <h2>Before production</h2>
+      <div class="scroller">
+        <table>
+          <thead>
+            <tr><th>Check</th><th>Why</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>TLS certificate and key are set</td>
+              <td>the store refuses to start otherwise, and plaintext HTTP needs an explicit switch</td>
+            </tr>
+            <tr>
+              <td>Swap is disabled</td>
+              <td>a second line behind <code>mlock</code>; the root key must not reach a disk</td>
+            </tr>
+            <tr>
+              <td>The audit disk has room</td>
+              <td>a full disk stops the store, because failing to record is failing to serve</td>
+            </tr>
+            <tr>
+              <td>Shares are distributed to different people</td>
+              <td>a quorum in one drawer is a root key in one drawer</td>
+            </tr>
+            <tr>
+              <td>A restore has been rehearsed</td>
+              <td><code>make drill</code> proves the code path; only you can prove the runbook</td>
+            </tr>
+            <tr>
+              <td><code>MARSEC_UI_ENABLED</code> is unset unless wanted</td>
+              <td>the console decrypts values onto a screen</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="excluded">
+      <h2>What it will not do</h2>
+      <p>These are decisions with reasons, not a backlog.</p>
+      <div class="scroller">
+        <table>
+          <thead>
+            <tr><th>Not supported</th><th>Because</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Auto-unseal</td>
+              <td>it moves the root key to whatever would perform the unsealing, which is then the thing to attack</td>
+            </tr>
+            <tr>
+              <td>Root key rotation</td>
+              <td>replacing the root means re-splitting every Shamir share; the key encryption key rotates instead</td>
+            </tr>
+            <tr>
+              <td>Response wrapping</td>
+              <td>dropped rather than deferred: every channel it would protect is already closed</td>
+            </tr>
+            <tr>
+              <td>Turning auditing off</td>
+              <td>there is no variable for it; a store that cannot record is a store that cannot serve</td>
+            </tr>
+            <tr>
+              <td>Parameter versioning</td>
+              <td>and therefore parameter rollback; secrets are versioned, configuration is not</td>
+            </tr>
+            <tr>
+              <td>High availability, dynamic secrets, PKI, transit</td>
+              <td>deferred beyond v1 from the start; auto-unseal is a prerequisite for the first, not an extra</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<footer class="site">
+  Apache License 2.0 ·
+  <a href="https://github.com/MarStack-Labs/marstack-secrets">Source</a> ·
+  <a href="https://github.com/MarStack-Labs/marstack-secrets/blob/main/docs/THREAT-MODEL.md">Threat model</a> ·
+  <a href="https://github.com/MarStack-Labs/marstack-secrets/blob/main/docs/ARCHITECTURE.md">Architecture</a> ·
+  <a href="https://github.com/MarStack-Labs/marstack-secrets/security/advisories/new">Report a vulnerability</a>
+</footer>
+
+</body>
+</html>

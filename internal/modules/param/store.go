@@ -15,6 +15,7 @@ const storedVersion = 1
 type Cipher interface {
 	Seal(ctx context.Context, tenant string, plaintext []byte, aad crypto.AAD) (crypto.Envelope, error)
 	Open(ctx context.Context, tenant string, envelope crypto.Envelope, aad crypto.AAD) (crypto.Sensitive, error)
+	Rewrap(ctx context.Context, tenant string, envelope crypto.Envelope, aad crypto.AAD) (crypto.Envelope, bool, error)
 }
 
 type Parameter struct {

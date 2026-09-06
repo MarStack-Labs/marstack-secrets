@@ -13,19 +13,35 @@ import (
 )
 
 type staticCipher struct {
-	kek crypto.Key
+	kek        crypto.Key
+	kekVersion int
+	rewrapErr  error
 }
 
-func (c staticCipher) Seal(_ context.Context, _ string, plaintext []byte, aad crypto.AAD) (crypto.Envelope, error) {
-	return crypto.Seal(c.kek, 1, plaintext, aad)
+func (c *staticCipher) Seal(_ context.Context, _ string, plaintext []byte, aad crypto.AAD) (crypto.Envelope, error) {
+	return crypto.Seal(c.kek, c.kekVersion, plaintext, aad)
 }
 
-func (c staticCipher) Open(_ context.Context, _ string, envelope crypto.Envelope, aad crypto.AAD) (crypto.Sensitive, error) {
+func (c *staticCipher) Open(_ context.Context, _ string, envelope crypto.Envelope, aad crypto.AAD) (crypto.Sensitive, error) {
 	plaintext, err := crypto.Open(c.kek, envelope, aad)
 	if err != nil {
 		return nil, err
 	}
 	return crypto.Sensitive(plaintext), nil
+}
+
+func (c *staticCipher) Rewrap(_ context.Context, _ string, envelope crypto.Envelope, aad crypto.AAD) (crypto.Envelope, bool, error) {
+	if c.rewrapErr != nil {
+		return crypto.Envelope{}, false, c.rewrapErr
+	}
+	if envelope.KEKVersion == c.kekVersion {
+		return envelope, false, nil
+	}
+	rewrapped, err := crypto.Rewrap(c.kek, c.kek, c.kekVersion, envelope, aad)
+	if err != nil {
+		return crypto.Envelope{}, false, err
+	}
+	return rewrapped, true, nil
 }
 
 func newTestStore(t *testing.T) *Store {
@@ -43,7 +59,7 @@ func newTestStore(t *testing.T) *Store {
 	}
 
 	at := time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC)
-	store, err := NewStore(db, staticCipher{kek: kek}, Options{Now: func() time.Time { return at }})
+	store, err := NewStore(db, &staticCipher{kek: kek, kekVersion: 1}, Options{Now: func() time.Time { return at }})
 	if err != nil {
 		t.Fatalf("NewStore returned error: %v", err)
 	}
@@ -332,7 +348,7 @@ func TestPathsAreValidated(t *testing.T) {
 }
 
 func TestNewStoreRequiresItsCollaborators(t *testing.T) {
-	if _, err := NewStore(nil, staticCipher{}, Options{}); !errors.Is(err, ErrNoDatabase) {
+	if _, err := NewStore(nil, &staticCipher{}, Options{}); !errors.Is(err, ErrNoDatabase) {
 		t.Errorf("NewStore without a database = %v, want ErrNoDatabase", err)
 	}
 

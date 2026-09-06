@@ -7,6 +7,33 @@ For a v1 release of a store that holds secrets, the entries worth reading are th
 *Deliberately absent*. Everything a version does not do is a thing an operator would otherwise find
 out during an incident.
 
+## [Unreleased]
+
+### Changed
+
+- The repository now matches `marstack-cloud` and `marstack-access`: a tracked `.githooks/pre-commit`
+  rather than an untracked one, `make tools`, `make dist` and `make site`, and a landing page at
+  `site/` built on the same theme the console serves.
+- `staticcheck` and `gosec` join the security gate. CI and the hook call the same `Makefile` targets,
+  so neither can drift from the other.
+- The console uses the shared `meridian.css`, so the three MarStack products look like one platform.
+
+### Fixed
+
+- `crypto.Label` bounded the parts it length-prefixes. Every caller was bounded elsewhere, but the
+  function relying on that bound did not enforce it, and an over-long part would have wrapped the
+  four byte prefix and let two different tenant and version pairs derive the same key encryption key.
+- Two dead symbols and a struct literal that should have been a conversion, all found by
+  `staticcheck`.
+- The README and threat model no longer claim GitHub Actions is disabled.
+
+### Notes
+
+- The audit chain uses the same four byte length prefix and is deliberately left alone. Widening it
+  would change every digest and make every existing record fail verification, which is the failure
+  the log exists to prevent. That, and the four other rules `gosec` is not asked about, are recorded
+  in [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## [1.2.0] — 2026-09-06
 
 ### Added

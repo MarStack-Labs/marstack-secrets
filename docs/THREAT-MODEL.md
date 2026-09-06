@@ -21,14 +21,16 @@ from the first commit, and each one is either enforced by a test or by a CI gate
 Every gate above is a target in the `Makefile`, and `make check` runs all of them. The workflow in
 `.github/workflows/ci.yml` calls the same targets, so the two can never drift.
 
-GitHub Actions is currently disabled on this repository to keep runner usage at zero, which makes
-`make check` the only place these gates run. Install the pre-commit hook after cloning:
+The gates run in two places: GitHub Actions on every push and pull request, and a pre-commit hook
+locally. Install the hook after cloning, so a problem is found before it is pushed rather than after:
 
 ```sh
+make tools
 make hooks
 ```
 
-Without the hook there is no enforcement at all, only intention. Dependency updates are applied by
+The hook is tracked in `.githooks/`, so it is reviewed like any other file rather than living
+untracked in `.git/` where nobody can see what it does. Dependency updates are applied by
 hand alongside the milestone that needs them rather than on a schedule, since scheduled pull
 requests cannot be verified while Actions are off.
 

@@ -13,9 +13,11 @@ Two kinds of data, handled differently:
 Workloads authenticate with an identity their control plane vouched for, receive access with a bounded
 lifetime, and cannot read anything the store failed to write a record for.
 
+**[Usage guide →](https://marstack-labs.github.io/marstack-secrets/)**
+
 ## Status
 
-v1 is complete: 385 tests, one direct dependency, no CI required to verify it.
+v1.2.0. One direct dependency, and every gate the hook runs is the gate CI runs.
 
 The server starts sealed, is initialized and unsealed with Shamir shares, authenticates workloads
 against bootstrap tokens or control plane assertions, serves secrets and parameters behind policy,
@@ -233,13 +235,16 @@ error: audit: the chain does not verify: expected record 4 but found 5
 | `make arch-check` | Fails if a module imports another module, or the server imports its own client |
 | `make drill` | Saves, verifies and restores a snapshot, and fails if the copy differs |
 | `make security` | `govulncheck` and `gitleaks` |
-| `make hooks` | Installs a pre-commit hook that runs `make check` |
+| `make tools` | Installs the scanners the gates use |
+| `make hooks` | Points git at the tracked `.githooks/pre-commit` |
+| `make dist` | Builds release archives for four platforms, with checksums |
+| `make site` | Brings the shared theme into the landing page |
 | `make vm-up` | Starts the Linux VM the process protections can be tested in |
 | `make vm-test` | Runs the suite inside that VM |
 
-Run `make hooks` once after cloning. GitHub Actions is disabled on this repository to keep runner
-usage at zero, so the pre-commit hook is where these gates actually run. Everything CI would do is a
-`Makefile` target, which is why turning CI off cost no coverage.
+Run `make tools` and `make hooks` once after cloning. Every gate is a `Makefile` target, and both the
+pre-commit hook and GitHub Actions call those targets rather than repeating the commands, so the two
+cannot disagree about what passing means.
 
 ## Requirements
 

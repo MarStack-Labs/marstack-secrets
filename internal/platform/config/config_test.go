@@ -169,3 +169,31 @@ func TestValidateReportsEveryProblemAtOnce(t *testing.T) {
 		}
 	}
 }
+
+func TestTheUIIsOffUntilItIsAskedFor(t *testing.T) {
+	cfg, err := Load(envFrom(map[string]string{"MARSEC_ALLOW_INSECURE_HTTP": "true"}))
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if cfg.UIEnabled {
+		t.Error("the browser interface must be off by default")
+	}
+
+	enabled, err := Load(envFrom(map[string]string{
+		"MARSEC_ALLOW_INSECURE_HTTP": "true",
+		"MARSEC_UI_ENABLED":          "true",
+	}))
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if !enabled.UIEnabled {
+		t.Error("MARSEC_UI_ENABLED=true did not enable the browser interface")
+	}
+
+	if _, err := Load(envFrom(map[string]string{
+		"MARSEC_ALLOW_INSECURE_HTTP": "true",
+		"MARSEC_UI_ENABLED":          "perhaps",
+	})); err == nil {
+		t.Error("an unparseable MARSEC_UI_ENABLED was accepted")
+	}
+}

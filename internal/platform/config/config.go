@@ -24,6 +24,7 @@ type Config struct {
 	ShutdownTimeout        time.Duration
 	AllowInsecureHTTP      bool
 	AllowUnprotectedMemory bool
+	UIEnabled              bool
 
 	ControlPlaneIssuer   string
 	ControlPlaneAudience string
@@ -91,6 +92,12 @@ func Load(getenv Getenv) (Config, error) {
 		return Config{}, err
 	}
 	cfg.AllowInsecureHTTP = insecure
+
+	ui, err := boolVar(getenv, "UI_ENABLED", cfg.UIEnabled)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.UIEnabled = ui
 
 	unprotected, err := boolVar(getenv, "ALLOW_UNPROTECTED_MEMORY", cfg.AllowUnprotectedMemory)
 	if err != nil {

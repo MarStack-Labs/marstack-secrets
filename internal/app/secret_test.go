@@ -18,6 +18,7 @@ import (
 	"github.com/marstack-labs/marstack-secrets/internal/platform/audit"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/authn"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/authz"
+	"github.com/marstack-labs/marstack-secrets/internal/platform/config"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/sqlite"
 )
 
@@ -28,10 +29,13 @@ type harness struct {
 	policy  *policy.Manager
 }
 
-func newHarness(t *testing.T) *harness {
+func newHarness(t *testing.T, adjust ...func(*config.Config)) *harness {
 	t.Helper()
 
 	cfg := testConfig(t)
+	for _, apply := range adjust {
+		apply(&cfg)
+	}
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 
 	db, err := sqlite.Open(t.Context(), cfg.DataDir+"/"+DatabaseFile)

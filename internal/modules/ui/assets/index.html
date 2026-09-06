@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>marstack-secrets</title>
+<link rel="stylesheet" href="/ui/app.css">
+</head>
+<body>
+
+<header>
+  <h1>marstack-secrets</h1>
+  <div id="seal-banner" class="banner">checking the store</div>
+  <div id="session" class="session">
+    <span id="session-who">not signed in</span>
+    <button id="sign-out" type="button" hidden>sign out</button>
+  </div>
+</header>
+
+<nav id="tabs">
+  <button type="button" data-view="store" class="active">Store</button>
+  <button type="button" data-view="secrets">Secrets</button>
+  <button type="button" data-view="params">Parameters</button>
+  <button type="button" data-view="leases">Leases</button>
+  <button type="button" data-view="access">Access</button>
+</nav>
+
+<main>
+
+<section id="view-store" class="view">
+  <h2>Seal</h2>
+  <dl id="seal-facts">
+    <dt>state</dt><dd id="fact-state">—</dd>
+    <dt>shares</dt><dd id="fact-shares">—</dd>
+    <dt>threshold</dt><dd id="fact-threshold">—</dd>
+    <dt>progress</dt><dd id="fact-progress">—</dd>
+    <dt>key encryption key version</dt><dd id="fact-kek">—</dd>
+  </dl>
+
+  <div id="init-panel" hidden>
+    <h3>Initialise</h3>
+    <p class="warn">The shares are returned once and never again. Nothing recovers a lost quorum.</p>
+    <label>shares <input id="init-shares" type="number" min="2" max="255" value="5"></label>
+    <label>threshold <input id="init-threshold" type="number" min="2" max="255" value="3"></label>
+    <button id="do-init" type="button">Initialise</button>
+    <pre id="init-shares-out" hidden></pre>
+  </div>
+
+  <div id="unseal-panel" hidden>
+    <h3>Unseal</h3>
+    <p>One share per submission. A quorum opens the store.</p>
+    <label>share <input id="unseal-share" type="password" autocomplete="off" spellcheck="false"></label>
+    <button id="do-unseal" type="button">Submit share</button>
+  </div>
+
+  <div id="rotate-panel" hidden>
+    <h3>Rotate the key encryption key</h3>
+    <p>Rewraps every stored value onto a new key encryption key. Payloads are not re-encrypted.</p>
+    <p class="warn">This reaches every tenant, including tenants you cannot read.</p>
+    <button id="do-rotate" type="button">Rotate</button>
+    <pre id="rotate-out" hidden></pre>
+  </div>
+
+  <h2>Sign in</h2>
+  <div id="login-panel">
+    <label>bootstrap token <input id="login-bootstrap" type="password" autocomplete="off" spellcheck="false"></label>
+    <button id="do-login" type="button">Exchange for a session</button>
+    <p class="hint">The session token is kept in memory only. Reloading this page signs you out.</p>
+  </div>
+</section>
+
+<section id="view-secrets" class="view" hidden>
+  <h2>Secrets</h2>
+  <label>tenant <input id="secret-tenant" placeholder="prod" spellcheck="false"></label>
+  <label>path <input id="secret-path" placeholder="payment-api" spellcheck="false"></label>
+  <label>version <input id="secret-version" type="number" min="0" placeholder="current"></label>
+
+  <div class="row">
+    <button id="secret-read" type="button">Read</button>
+    <button id="secret-meta" type="button">Metadata</button>
+    <button id="secret-delete" type="button" class="danger">Delete current version</button>
+  </div>
+
+  <div id="secret-value-panel" hidden>
+    <h3>Value</h3>
+    <div class="row">
+      <output id="secret-value" class="masked"></output>
+      <button id="secret-reveal" type="button">Reveal</button>
+      <button id="secret-copy" type="button">Copy</button>
+      <button id="secret-forget" type="button">Clear</button>
+    </div>
+    <p class="hint">Revealing puts the value in the page. Copying puts it on the system clipboard.</p>
+  </div>
+
+  <h3>Write a new version</h3>
+  <label>value <textarea id="secret-new" rows="3" autocomplete="off" spellcheck="false"></textarea></label>
+  <label>check and set <input id="secret-cas" type="number" min="0" placeholder="unchecked"></label>
+  <button id="secret-write" type="button">Write</button>
+</section>
+
+<section id="view-params" class="view" hidden>
+  <h2>Parameters</h2>
+  <label>tenant <input id="param-tenant" placeholder="prod" spellcheck="false"></label>
+  <label>prefix <input id="param-prefix" placeholder="app/" spellcheck="false"></label>
+  <button id="param-list" type="button">List</button>
+  <table id="param-table" hidden>
+    <thead><tr><th>path</th><th>kind</th><th>updated</th><th>by</th></tr></thead>
+    <tbody id="param-rows"></tbody>
+  </table>
+
+  <h3>Read or write</h3>
+  <label>path <input id="param-path" placeholder="app/log_level" spellcheck="false"></label>
+  <div class="row">
+    <button id="param-read" type="button">Read</button>
+    <button id="param-delete" type="button" class="danger">Delete</button>
+  </div>
+  <div id="param-value-panel" hidden>
+    <output id="param-value"></output>
+    <span id="param-origin" class="hint"></span>
+  </div>
+
+  <label>kind
+    <select id="param-kind">
+      <option value="string">string</option>
+      <option value="int">int</option>
+      <option value="bool">bool</option>
+      <option value="stringlist">stringlist</option>
+    </select>
+  </label>
+  <label>value <input id="param-new" autocomplete="off" spellcheck="false"></label>
+  <button id="param-write" type="button">Write</button>
+</section>
+
+<section id="view-leases" class="view" hidden>
+  <h2>Leases</h2>
+  <p class="hint">Every read records who holds which version until when. This lists your own.</p>
+  <button id="lease-list" type="button">Refresh</button>
+  <table id="lease-table" hidden>
+    <thead><tr><th>id</th><th>path</th><th>version</th><th>expires</th><th></th></tr></thead>
+    <tbody id="lease-rows"></tbody>
+  </table>
+</section>
+
+<section id="view-access" class="view" hidden>
+  <h2>What am I allowed to do</h2>
+  <label>tenant <input id="check-tenant" placeholder="prod" spellcheck="false"></label>
+  <label>path <input id="check-path" placeholder="secret/prod/payment-api" spellcheck="false"></label>
+  <label>capability
+    <select id="check-capability">
+      <option value="read">read</option>
+      <option value="write">write</option>
+      <option value="list">list</option>
+      <option value="delete">delete</option>
+      <option value="destroy">destroy</option>
+    </select>
+  </label>
+  <button id="do-check" type="button">Check</button>
+  <pre id="check-out" hidden></pre>
+
+  <h2>This session</h2>
+  <button id="do-self" type="button">Who am I</button>
+  <pre id="self-out" hidden></pre>
+</section>
+
+</main>
+
+<div id="toast" role="status" aria-live="polite" hidden></div>
+
+<footer>
+  <p>Values shown here are decrypted in your browser's memory. Close the tab when you are done.</p>
+</footer>
+
+<script src="/ui/app.js"></script>
+</body>
+</html>

@@ -20,6 +20,7 @@ import (
 	"github.com/marstack-labs/marstack-secrets/internal/modules/rotate"
 	"github.com/marstack-labs/marstack-secrets/internal/modules/seal"
 	"github.com/marstack-labs/marstack-secrets/internal/modules/secret"
+	"github.com/marstack-labs/marstack-secrets/internal/modules/ui"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/audit"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/authn"
 	"github.com/marstack-labs/marstack-secrets/internal/platform/authz"
@@ -263,6 +264,43 @@ func assemble(ctx context.Context, cfg config.Config, logger *slog.Logger, db *s
 		return nil, err
 	}
 
+	modules := []Module{
+		health.New(),
+		observe.NewModule(instrument.registry),
+		seal.NewModule(sealManager, logger, sink),
+		authModule,
+		policy.NewModule(policyManager, guard, logger),
+		lease.NewModule(leaseManager, lease.ModuleOptions{
+			Authorizer: policyManager,
+			Guard:      guard,
+			Logger:     logger,
+		}),
+		rotateModule,
+		param.NewModule(paramService, param.ModuleOptions{
+			Authorizer: policyManager,
+			Audit:      sink,
+			Guard:      guard,
+			Logger:     logger,
+		}),
+		secret.NewModule(secretService, secret.ModuleOptions{
+			Authorizer: policyManager,
+			Leases:     leaseIssuer{manager: leaseManager},
+			Audit:      sink,
+			LeaseTTL:   cfg.LeaseTTL,
+			Guard:      guard,
+			Logger:     logger,
+		}),
+	}
+
+	if cfg.UIEnabled {
+		browser, err := ui.NewModule(ui.Options{Logger: logger})
+		if err != nil {
+			return nil, err
+		}
+		modules = append(modules, browser)
+		logger.Warn("the browser interface is enabled; secret values will be decrypted into browsers and onto screens")
+	}
+
 	return &App{
 		cfg:     cfg,
 		logger:  logger,
@@ -271,33 +309,7 @@ func assemble(ctx context.Context, cfg config.Config, logger *slog.Logger, db *s
 		leases:  leaseManager,
 		audit:   trail,
 		metrics: instrument,
-		modules: []Module{
-			health.New(),
-			observe.NewModule(instrument.registry),
-			seal.NewModule(sealManager, logger, sink),
-			authModule,
-			policy.NewModule(policyManager, guard, logger),
-			lease.NewModule(leaseManager, lease.ModuleOptions{
-				Authorizer: policyManager,
-				Guard:      guard,
-				Logger:     logger,
-			}),
-			param.NewModule(paramService, param.ModuleOptions{
-				Authorizer: policyManager,
-				Audit:      sink,
-				Guard:      guard,
-				Logger:     logger,
-			}),
-			rotateModule,
-			secret.NewModule(secretService, secret.ModuleOptions{
-				Authorizer: policyManager,
-				Leases:     leaseIssuer{manager: leaseManager},
-				Audit:      sink,
-				LeaseTTL:   cfg.LeaseTTL,
-				Guard:      guard,
-				Logger:     logger,
-			}),
-		},
+		modules: modules,
 	}, nil
 }
 

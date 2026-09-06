@@ -1,0 +1,7 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "The example host in the documentation is named after what this store holds, so generic-api-key reads secrets.internal:<port> as a keyword, a colon and a token. Only lines containing that exact host and port are exempt, so every other line in the same file is still scanned."
+regexTarget = "line"
+regexes = ['''https://secrets\.internal:\d+''']

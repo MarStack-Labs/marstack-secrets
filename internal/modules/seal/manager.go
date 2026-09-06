@@ -30,6 +30,11 @@ type Status struct {
 	KEKVersion int
 }
 
+type Rotation struct {
+	From int
+	To   int
+}
+
 type Options struct {
 	Now func() time.Time
 }
@@ -165,7 +170,42 @@ func (m *Manager) Seal() {
 		m.root.Zero()
 		m.root = nil
 	}
+	m.kekVersion = 0
 	m.discardCollected()
+}
+
+func (m *Manager) Rotate(ctx context.Context) (Rotation, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	stored, err := m.readConfig(ctx)
+	if err != nil {
+		return Rotation{}, err
+	}
+	if !stored.initialized {
+		return Rotation{}, ErrNotInitialized
+	}
+	if m.root == nil {
+		return Rotation{}, ErrSealed
+	}
+
+	next := stored.kekVersion + 1
+	result, err := m.db.ExecContext(ctx,
+		`UPDATE seal_config SET kek_version = ? WHERE id = 1 AND kek_version = ?`,
+		next, stored.kekVersion)
+	if err != nil {
+		return Rotation{}, err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return Rotation{}, err
+	}
+	if affected != 1 {
+		return Rotation{}, ErrRotationRaced
+	}
+
+	m.kekVersion = next
+	return Rotation{From: stored.kekVersion, To: next}, nil
 }
 
 func (m *Manager) Status(ctx context.Context) (Status, error) {
@@ -206,6 +246,39 @@ func (m *Manager) sealingKEK(tenant string) (crypto.Key, int, error) {
 		return nil, 0, err
 	}
 	return kek, version, nil
+}
+
+func (m *Manager) rewrap(tenant string, envelope crypto.Envelope, aad crypto.AAD) (crypto.Envelope, bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.root == nil {
+		return crypto.Envelope{}, false, ErrSealed
+	}
+	if envelope.KEKVersion > m.kekVersion {
+		return crypto.Envelope{}, false, ErrKEKVersion
+	}
+	if envelope.KEKVersion == m.kekVersion {
+		return envelope, false, nil
+	}
+
+	current, err := m.deriveKEKLocked(tenant, envelope.KEKVersion)
+	if err != nil {
+		return crypto.Envelope{}, false, err
+	}
+	defer current.Zero()
+
+	next, err := m.deriveKEKLocked(tenant, m.kekVersion)
+	if err != nil {
+		return crypto.Envelope{}, false, err
+	}
+	defer next.Zero()
+
+	rewrapped, err := crypto.Rewrap(current, next, m.kekVersion, envelope, aad)
+	if err != nil {
+		return crypto.Envelope{}, false, err
+	}
+	return rewrapped, true, nil
 }
 
 func (m *Manager) deriveKEKLocked(tenant string, version int) (crypto.Key, error) {

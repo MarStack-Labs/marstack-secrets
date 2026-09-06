@@ -10,4 +10,5 @@ var (
 	ErrUnsealFailed       = errors.New("seal: the supplied shares do not reconstruct the root key")
 	ErrInvalidShare       = errors.New("seal: share is empty or malformed")
 	ErrKEKVersion         = errors.New("seal: key encryption key version is out of range")
+	ErrRotationRaced      = errors.New("seal: the key encryption key version changed during rotation")
 )

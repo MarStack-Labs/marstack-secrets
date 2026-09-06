@@ -37,3 +37,10 @@ func (c *Cipher) Open(_ context.Context, tenant string, envelope crypto.Envelope
 	}
 	return crypto.Sensitive(plaintext), nil
 }
+
+func (c *Cipher) Rewrap(_ context.Context, tenant string, envelope crypto.Envelope, aad crypto.AAD) (crypto.Envelope, bool, error) {
+	if envelope.KEKVersion < initialKEKVersion {
+		return crypto.Envelope{}, false, crypto.ErrDecrypt
+	}
+	return c.manager.rewrap(tenant, envelope, aad)
+}

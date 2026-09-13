@@ -79,14 +79,16 @@
       <h2>Watch it run</h2>
 
       <p>
-        A store comes up sealed, is initialised into five shares, and is opened by three of them.
-        A secret is written and read back in full. Then every file in the data directory is
-        searched for that value, and none of them holds it.
+        A store is initialised into five shares and is live straight away, because the key it just
+        made is still in memory. Then the process is restarted, and it comes back
+        <strong>sealed</strong> — which is the whole design, and the part worth watching. Three
+        shares walk it back open one at a time. A secret is written and read back in full, and then
+        every file in the data directory is searched for that value and none of them holds it.
       </p>
 
       <figure class="demo">
         <img src="demo.gif" alt="A terminal session unsealing a store with a quorum of shares, writing and reading a secret, then finding no trace of its value anywhere in the data directory"
-             width="1011" height="567" loading="lazy">
+             width="1011" height="609" loading="lazy">
         <figcaption>
           Recorded by
           <a href="https://github.com/MarStack-Labs/marstack-secrets/blob/main/site/demo.sh">site/demo.sh</a>
@@ -280,6 +282,18 @@ curl -s -X POST https://secrets.internal:8200/v1/sys/rotate \
           recorded rather than absorbed.
         </p>
       </div>
+    
+      <figure class="demo">
+        <img src="ui-demo.gif" alt="The marstack-secrets console initialising a store, showing the five shares, coming back sealed after a restart, and being unsealed one share at a time"
+             width="900" height="605" loading="lazy">
+        <figcaption>
+          Driven by
+          <a href="https://github.com/MarStack-Labs/marstack-secrets/blob/main/site/ui-demo.sh">site/ui-demo.sh</a>
+          through Playwright, which restarts the server mid-recording so the console is seen going
+          from unsealed back to sealed and open again. Regenerate it with
+          <code>./site/ui-demo.sh</code>; it needs <code>npm install playwright</code>.
+        </figcaption>
+      </figure>
     </section>
 
     <section id="numbers">

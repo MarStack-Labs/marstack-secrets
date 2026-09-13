@@ -84,6 +84,20 @@ python3 -c "
 import json
 print('\n'.join(json.load(open('$DATA/init.json'))['shares'][:3]))" > "$DATA/quorum"
 
+say "curl -s $BASE/v1/sys/seal-status"
+
+type_out "kill \$SERVER_PID && marsec server &"
+sleep 0.4
+kill "$SERVER_PID" 2>/dev/null
+wait "$SERVER_PID" 2>/dev/null
+"$BINARY" server > "$DATA/server.log" 2>&1 &
+SERVER_PID=$!
+until curl -sf -o /dev/null "$BASE/v1/sys/health" 2>/dev/null; do sleep 0.1; done
+printf '\n'
+sleep "$PAUSE"
+
+say "curl -s $BASE/v1/sys/seal-status"
+
 while read -r share; do
   type_out "curl -s -X POST $BASE/v1/sys/unseal -d '{\"share\":\"${share:0:18}...\"}'"
   sleep 0.2

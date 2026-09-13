@@ -1,0 +1,28 @@
+{
+  "measured_at": "2026-09-13",
+  "method": {
+    "host": "aarch64 guest under apple, 2 cores",
+    "os": "Linux 6.8.0-134-generic (aarch64)",
+    "version": "v1.2.1",
+    "runs": 5,
+    "statistic": "median, on loopback against a store with nothing else running"
+  },
+  "values": {
+    "binary_bytes": 12976393,
+    "deps_direct": 1,
+    "deps_total": 25,
+    "request_rate_per_minute": 600,
+    "coldstart_ms": 66.0,
+    "unseal_ms": 24.0,
+    "unseal_shares": 5,
+    "unseal_threshold": 3,
+    "secret_write_p50_ms": 1.16,
+    "secret_write_p99_ms": 4.05,
+    "secret_read_p50_ms": 0.68,
+    "secret_read_p99_ms": 3.12,
+    "secret_count": 200,
+    "param_read_p50_ms": 0.35,
+    "audit_verify_ms": 12.3,
+    "audit_records": 606
+  }
+}

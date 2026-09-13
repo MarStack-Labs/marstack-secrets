@@ -14,7 +14,9 @@
   <b class="ms-wordmark">marstack</b>
   <span class="ms-eyebrow">secrets</span>
   <span class="grow"></span>
+  <a href="#demo">Demo</a>
   <a href="#quickstart">Quickstart</a>
+  <a href="#numbers">Numbers</a>
   <a href="#rotation">Rotation</a>
   <a href="#console">Console</a>
   <a href="https://github.com/MarStack-Labs/marstack-secrets">GitHub</a>
@@ -53,6 +55,7 @@
 <div class="page">
   <aside class="toc">
     <ol>
+      <li><a href="#demo">Watch it run</a></li>
       <li><a href="#what">What it is</a></li>
       <li><a href="#install">Install</a></li>
       <li><a href="#quickstart">First run</a></li>
@@ -62,6 +65,7 @@
       <li><a href="#leases">Leases</a></li>
       <li><a href="#rotation">Rotation</a></li>
       <li><a href="#console">The console</a></li>
+      <li><a href="#numbers">Numbers</a></li>
       <li><a href="#audit">The audit log</a></li>
       <li><a href="#agent">The agent</a></li>
       <li><a href="#production">Before production</a></li>
@@ -70,6 +74,31 @@
   </aside>
 
   <main class="body">
+
+    <section id="demo">
+      <h2>Watch it run</h2>
+
+      <p>
+        A store comes up sealed, is initialised into five shares, and is opened by three of them.
+        A secret is written and read back in full. Then every file in the data directory is
+        searched for that value, and none of them holds it.
+      </p>
+
+      <figure class="demo">
+        <img src="demo.gif" alt="A terminal session unsealing a store with a quorum of shares, writing and reading a secret, then finding no trace of its value anywhere in the data directory"
+             width="1011" height="567" loading="lazy">
+        <figcaption>
+          Recorded by
+          <a href="https://github.com/MarStack-Labs/marstack-secrets/blob/main/site/demo.sh">site/demo.sh</a>
+          into <a href="demo.cast">demo.cast</a>, an asciinema recording that is plain text you can
+          read line by line. The script refuses to reach the search step unless the read actually
+          returned the value first, because a search that finds nothing proves nothing if the write
+          never happened.
+        </figcaption>
+        <pre><code>asciinema rec --command ./site/demo.sh site/demo.cast
+agg site/demo.cast site/demo.gif</code></pre>
+      </figure>
+    </section>
 
     <section id="what">
       <h2>What it is</h2>
@@ -253,6 +282,130 @@ curl -s -X POST https://secrets.internal:8200/v1/sys/rotate \
       </div>
     </section>
 
+    <section id="numbers">
+      <h2>Numbers</h2>
+
+      <p>
+        Everything below is measured by <code>scripts/bench.sh</code> in this repository and read
+        from <a href="metrics.json">metrics.json</a> when the page loads. Nothing here is typed in
+        by hand, so a figure that has not been measured on the current build shows a dash rather
+        than a number somebody remembered.
+      </p>
+
+      <div class="stats">
+        <dl class="ms-stat" style="--ms-stat-hue: var(--ms-accent)">
+          <dt>One binary</dt>
+          <dd data-metric="binary_bytes" data-unit="mib">—</dd>
+          <dd class="foot">server, operator tool, client and agent</dd>
+        </dl>
+        <dl class="ms-stat" style="--ms-stat-hue: var(--ms-ok)">
+          <dt>Direct dependencies</dt>
+          <dd data-metric="deps_direct">—</dd>
+          <dd class="foot"><span data-metric="deps_total">—</span> modules in the whole graph</dd>
+        </dl>
+        <dl class="ms-stat" style="--ms-stat-hue: var(--ms-info)">
+          <dt>Start to serving</dt>
+          <dd data-metric="coldstart_ms" data-unit="ms">—</dd>
+          <dd class="foot">sealed and refusing to decrypt, on an empty data directory</dd>
+        </dl>
+        <dl class="ms-stat" style="--ms-stat-hue: var(--ms-violet)">
+          <dt>Unseal</dt>
+          <dd data-metric="unseal_ms" data-unit="ms">—</dd>
+          <dd class="foot">
+            a quorum of <span data-metric="unseal_threshold">—</span> shares
+            out of <span data-metric="unseal_shares">—</span>
+          </dd>
+        </dl>
+        <dl class="ms-stat" style="--ms-stat-hue: var(--ms-cyan)">
+          <dt>Secret read</dt>
+          <dd data-metric="secret_read_p50_ms" data-unit="ms">—</dd>
+          <dd class="foot">
+            p50, p99 <span data-metric="secret_read_p99_ms" data-unit="ms">—</span>,
+            decrypting every time
+          </dd>
+        </dl>
+        <dl class="ms-stat" style="--ms-stat-hue: var(--ms-sky)">
+          <dt>Secret write</dt>
+          <dd data-metric="secret_write_p50_ms" data-unit="ms">—</dd>
+          <dd class="foot">
+            p50 over <span data-metric="secret_count">—</span> secrets,
+            p99 <span data-metric="secret_write_p99_ms" data-unit="ms">—</span>
+          </dd>
+        </dl>
+        <dl class="ms-stat" style="--ms-stat-hue: var(--ms-pending)">
+          <dt>Parameter read</dt>
+          <dd data-metric="param_read_p50_ms" data-unit="ms">—</dd>
+          <dd class="foot">not encrypted, which is why it is the faster of the two</dd>
+        </dl>
+        <dl class="ms-stat" style="--ms-stat-hue: var(--ms-warn)">
+          <dt>Audit chain verify</dt>
+          <dd data-metric="audit_verify_ms" data-unit="ms">—</dd>
+          <dd class="foot">over <span data-metric="audit_records">—</span> records, hash by hash</dd>
+        </dl>
+      </div>
+
+      <p class="method" data-method>
+        Measured on <b data-method-host>—</b>, <span data-method-os>—</span>, build
+        <span data-method-version>—</span>. <span data-method-statistic>—</span>,
+        <span data-method-runs>—</span> runs per figure. Last measured
+        <span data-method-date>—</span>.
+      </p>
+
+      <div class="note" data-tone="info">
+        <p>
+          The latency figures are taken with the per-caller rate limit raised, so that they measure
+          the store rather than its limiter. That limit is a real default and this build ships
+          <strong><span data-metric="request_rate_per_minute">—</span> requests per minute</strong>
+          per caller; a client that ignores it will meet it long before it meets these numbers.
+        </p>
+      </div>
+
+      <div class="note" data-tone="warn">
+        <p>
+          One machine, loopback, nothing else running, and a store holding a few hundred entries.
+          These are not a promise about your network or your fleet. The script is in the repository
+          so you can disagree with them on yours.
+        </p>
+      </div>
+
+      <h3>What the shape buys</h3>
+
+      <p>
+        Speed is the least interesting thing here. What matters is what an attacker gets for each
+        thing they manage to steal.
+      </p>
+
+      <div class="scroller">
+        <table>
+          <thead>
+            <tr><th>The usual arrangement</th><th>This one</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>The store holds the key it decrypts with, so the process can always read everything</td>
+              <td>It starts sealed. The key is split, and a quorum has to reassemble it before anything decrypts</td>
+            </tr>
+            <tr>
+              <td>A stolen database is a stolen estate</td>
+              <td>A stolen database decrypts to nothing. The demo above searches every file for a value it just read back</td>
+            </tr>
+            <tr>
+              <td>Access is granted for as long as nobody revokes it</td>
+              <td>Access is a lease with a deadline, so revoking a scope is a thing you can actually do</td>
+            </tr>
+            <tr>
+              <td>An audit log is a file the server appends to and could rewrite</td>
+              <td>A hash chain the server refuses to run without, and that anyone can verify offline</td>
+            </tr>
+            <tr>
+              <td>Dozens of dependencies, each one surface you did not write</td>
+              <td><span data-metric="deps_direct">—</span> direct dependency, on a product whose whole job is holding keys</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <section id="audit">
       <h2>The audit log</h2>
       <p>
@@ -369,5 +522,6 @@ curl -s -X POST https://secrets.internal:8200/v1/sys/rotate \
   <a href="https://github.com/MarStack-Labs/marstack-secrets/security/advisories/new">Report a vulnerability</a>
 </footer>
 
+<script src="metrics.js"></script>
 </body>
 </html>

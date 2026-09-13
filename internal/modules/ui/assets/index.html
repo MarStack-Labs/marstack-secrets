@@ -45,7 +45,12 @@
     <label>shares <input id="init-shares" type="number" min="2" max="255" value="5"></label>
     <label>threshold <input id="init-threshold" type="number" min="2" max="255" value="3"></label>
     <button id="do-init" type="button">Initialise</button>
-    <pre id="init-shares-out" hidden></pre>
+  </div>
+
+  <div id="shares-panel" hidden>
+    <h3>Your shares</h3>
+    <p class="warn">These are shown here once. Copy them somewhere safe before you leave this page.</p>
+    <pre id="init-shares-out"></pre>
   </div>
 
   <div id="unseal-panel" hidden>

@@ -161,3 +161,40 @@ func TestAModuleWithoutALoggerIsRefused(t *testing.T) {
 		t.Fatal("NewModule accepted a nil logger")
 	}
 }
+
+func TestTheSharesSurviveTheSealRefreshThatFollowsInitialising(t *testing.T) {
+	page := get(t, newTestModule(t), pathIndex).Body.String()
+
+	start := strings.Index(page, `id="init-panel"`)
+	if start < 0 {
+		t.Fatal("the page has no init panel")
+	}
+	end := strings.Index(page[start:], "</div>")
+	if end < 0 {
+		t.Fatal("the init panel is never closed")
+	}
+
+	if strings.Contains(page[start:start+end], `id="init-shares-out"`) {
+		t.Error("the shares are rendered inside the init panel, which refreshSeal hides " +
+			"as soon as the store stops being uninitialised; the shares are returned once " +
+			"and nothing recovers a lost quorum")
+	}
+}
+
+func TestTheSealRefreshNeverHidesTheSharesPanel(t *testing.T) {
+	script := get(t, newTestModule(t), pathScript).Body.String()
+
+	refresh := strings.Index(script, "function refreshSeal")
+	if refresh < 0 {
+		t.Fatal("the script has no refreshSeal")
+	}
+	end := strings.Index(script[refresh:], "\n  }")
+	if end < 0 {
+		t.Fatal("refreshSeal is never closed")
+	}
+
+	if strings.Contains(script[refresh:refresh+end], `show("shares-panel"`) {
+		t.Error("refreshSeal toggles the shares panel; it runs after initialising and " +
+			"would hide the one copy of the shares the operator will ever be shown")
+	}
+}

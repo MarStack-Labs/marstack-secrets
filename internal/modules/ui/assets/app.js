@@ -334,9 +334,8 @@
       shares: Number(el("init-shares").value),
       threshold: Number(el("init-threshold").value)
     }).then(function (created) {
-      var out = el("init-shares-out");
-      out.textContent = created.shares.join("\n");
-      out.hidden = false;
+      el("init-shares-out").textContent = created.shares.join("\n");
+      show("shares-panel", true);
       toast("copy these now; they are never shown again", true);
       refreshSeal();
     }).catch(fail);
